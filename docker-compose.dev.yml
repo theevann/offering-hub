@@ -1,0 +1,10 @@
+services:
+  api:
+    volumes:
+      - ./api:/app
+    command: npm run dev:docker
+
+  bot:
+    volumes:
+      - ./bot/src:/app/src
+    command: npm run dev

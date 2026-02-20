@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OfferingCategory {
+  CLASS // Structured recurring sessions (yoga, language, etc.)
+  WORKSHOP // One-off educational events
+  GATHERING // Social events, markets, meetups
+  SERVICE // Ongoing offerings (therapy, coaching)
+  SALE // Items for sale
+  OTHER // Doesn't fit other categories
+}
+
+enum ParseStatus {
+  PENDING // Not yet processed
+  PROCESSING // Currently being parsed
+  PARSED_OK // Successfully parsed into Offering
+  PARSED_PARTIAL // Parsed but missing key fields (e.g. no date)
+  PARSED_NOOP // Parsed but determined to be non-offering (e.g. just a chat message)
+  DUPLICATE // Parsed but matches an existing offering
+  FAILED // Parsing failed, check parseError
+}
+
+model Group {
+  id         String @id @default(cuid())
+  whatsappId String @unique // WhatsApp's internal group ID
+  name       String // Human-readable name
+
+  // Location context (manually configured)
+  country   String // e.g., "India", "Indonesia"
+  city      String // e.g., "Arambol", "Ubud"
+  latitude  Float // City center latitude
+  longitude Float // City center longitude
+  timezone  String? // e.g., "Asia/Kolkata", "Asia/Bali"
+
+  // Status
+  active Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  rawMessages RawMessage[]
+
+  @@index([country])
+  @@index([city])
+}
+
+model RawMessage {
+  id     String @id @default(cuid())
+  source String @default("whatsapp")
+
+  // WhatsApp metadata
+  messageId   String?   @unique
+  senderId    String
+  senderPhone String?
+  senderName  String?
+  groupId     String?
+  timestamp   DateTime?
+
+  // Content
+  rawText     String
+  rawTextHash String?
+
+  // Processing state
+  parsingStatus ParseStatus @default(PENDING)
+  parsingNotes  String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  offerings Offering[]
+  group     Group?     @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@index([parsingStatus])
+  @@index([createdAt])
+  @@index([rawTextHash, createdAt])
+}
+
+model Offering {
+  id          String           @id @default(cuid())
+  category    OfferingCategory
+  title       String
+  description String?
+  startTime   DateTime? // Full timestamp combining date + start time (timezone-aware)
+  endTime     DateTime? // Full timestamp combining date + end time (timezone-aware)
+  pricingType String? // e.g. "free", "fixed", "donation", "range"
+  price       Json? // Flexible pricing info (e.g. { "amount": 10, "currency": "USD" })
+  location    String? // Freeform location text (e.g. "Arambol beach")
+  latitude    Float? // Geocoded latitude
+  longitude   Float? // Geocoded longitude
+
+  // Original message reference
+  rawMessageId String     @unique
+  rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
+
+  createdAt DateTime @default(now())
+}

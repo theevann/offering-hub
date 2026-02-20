@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:18
+    container_name: offerings_db
+    restart: always
+    environment:
+      POSTGRES_USER: offerings_user
+      POSTGRES_PASSWORD: offerings_pass
+      POSTGRES_DB: offerings_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/
+
+  api:
+    build: ./api
+    container_name: offerings_api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://offerings_user:offerings_pass@db:5432/offerings_db
+    depends_on:
+      - db
+
+  bot:
+    build: ./bot
+    shm_size: "1gb"
+    container_name: offerings_bot
+    restart: always
+    environment:
+      API_URL: http://api:3000
+    depends_on:
+      - api
+    volumes:
+      - bot_session:/app/session
+      - bot_logs:/app/logs
+
+volumes:
+  postgres_data:
+  bot_session:
+  bot_logs:

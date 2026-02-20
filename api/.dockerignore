@@ -1,0 +1,28 @@
+# Keep package*.json so Docker can cache npm install layers
+# Do NOT ignore package.json or package-lock.json
+
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.DS_Store
+.git
+.vscode
+.idea
+coverage
+dist
+build
+tmp
+*.log
+.env
+.env.*
+*.tgz
+.pnp
+.pnp.js
+
+# macOS
+**/.DS_Store
+
+# leave package*.json in context
+!package.json
+!package-lock.json
