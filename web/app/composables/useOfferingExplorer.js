@@ -40,6 +40,16 @@ function uniqueSorted(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b))
 }
 
+function generateGoogleMapsUrl(offering) {
+  const venue = offering.venue
+  if (!venue?.googlePlaceId) return null
+  
+  const query = venue.displayName || venue.address || 'Location'
+  const placeId = venue.googlePlaceId
+  
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&query_place_id=${placeId}`
+}
+
 export function useOfferingExplorer() {
   const offerings = ref([])
   const groups = ref([])
@@ -65,18 +75,15 @@ export function useOfferingExplorer() {
     error.value = ''
 
     try {
-      const apiBase = config.public.apiBase || 'http://localhost:3000'
-      const offeringsRes = await fetch(`${apiBase}/offerings/all`)
+      // const apiBase = config.public.apiBase || 'http://localhost:3000'
+      // const offeringsRes = await fetch(`${apiBase}/offerings/all`)
+      const offeringsList = await $fetch('/api/offerings')
+      console.log('Fetched offerings:', offeringsList) // Debug log
 
-      if (!offeringsRes.ok) {
-        throw new Error(`Failed to fetch offerings (${offeringsRes.status})`)
-      }
-
-      const offeringsPayload = await offeringsRes.json()
-      const offeringsList = Array.isArray(offeringsPayload) ? offeringsPayload : []
+      const safeList = Array.isArray(offeringsList) ? offeringsList : []
       const discoveredGroups = new Map()
 
-      offerings.value = offeringsList.map((offering) => {
+      offerings.value = safeList.map((offering) => {
         const group = offering.rawMessage?.group || null
         if (group?.id && !discoveredGroups.has(group.id)) {
           discoveredGroups.set(group.id, group)
@@ -87,7 +94,7 @@ export function useOfferingExplorer() {
         const pricingType = normalizePricingType(offering.pricingType, Boolean(offering.price))
         const country = group?.country || null
         const city = group?.city || null
-        const locationLabel = offering.location || [city, country].filter(Boolean).join(', ') || 'Location TBD'
+        const locationLabel = offering.venue?.displayName || offering.venue?.address || offering.location || [city, country].filter(Boolean).join(', ') || 'Location TBD'
 
         return {
           ...offering,
@@ -305,5 +312,6 @@ export function useOfferingExplorer() {
     togglePricingType,
     clearFilters,
     refresh,
+    generateGoogleMapsUrl,
   }
 }

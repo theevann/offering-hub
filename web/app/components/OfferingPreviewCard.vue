@@ -14,7 +14,16 @@
 
     <template #footer>
       <div class="meta">
-        <UBadge color="primary" variant="subtle" :label="offering.locationLabel" />
+        <a
+          v-if="mapsUrl"
+          :href="mapsUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="location-link"
+        >
+          <UBadge color="primary" variant="subtle" :label="offering.locationLabel" />
+        </a>
+        <UBadge v-else color="primary" variant="subtle" :label="offering.locationLabel" />
         <UBadge color="secondary" variant="subtle" :label="offering.priceLabel" />
         <UBadge color="neutral" variant="subtle" :label="offering.group?.name || 'Unknown group'" />
       </div>
@@ -33,6 +42,9 @@ const props = defineProps({
 })
 
 const { formatDateRange } = useOfferingFormatters()
+const { generateGoogleMapsUrl } = useOfferingExplorer()
+
+const mapsUrl = computed(() => generateGoogleMapsUrl(props.offering))
 
 const palette = {
   CLASS: ['#e6f4ff', '#bfe7ff'],
@@ -98,6 +110,18 @@ h3 {
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  align-items: center;
 }
+
+.location-link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 160ms ease;
+}
+
+.location-link:hover {
+  transform: scale(1.05);
+}
+
 </style>

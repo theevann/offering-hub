@@ -9,11 +9,15 @@ async function getActiveGroups() {
       id: true,
       whatsappId: true,
       name: true,
+      type: true,
       country: true,
+      adminArea: true,
       city: true,
       latitude: true,
       longitude: true,
-      timezone: true
+      radiusKm: true,
+      timezone: true,
+      venueId: true
     }
   });
 }

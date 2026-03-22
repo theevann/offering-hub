@@ -1,5 +1,6 @@
-require('dotenv').config();
-
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
 
 const PROVIDERS = {
     deepseek: {
@@ -26,9 +27,17 @@ const PROVIDERS = {
         maxTokens: 1024,
         temperature: 0.1
     },
-    qwen3: {
+    qwen_3: {
         url: 'https://api.cerebras.ai/v1/chat/completions',
         model: 'qwen-3-235b-a22b-instruct-2507',
+        envKey: 'CEREBRAS_API_KEY',
+        maxTokensField: 'max_completion_tokens',
+        maxTokens: 1024,
+        temperature: 0.1
+    },
+    llama_31_8b: {
+        url: 'https://api.cerebras.ai/v1/chat/completions',
+        model: 'llama3.1-8b',
         envKey: 'CEREBRAS_API_KEY',
         maxTokensField: 'max_completion_tokens',
         maxTokens: 1024,

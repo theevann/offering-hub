@@ -1,20 +1,26 @@
-require('dotenv').config();
+console.log("Starting WhatsApp Bot in environment:", process.env.NODE_ENV);
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config()
+}
+
 const qrcode = require("qrcode-terminal");
 const axios = require("axios");
 const fs = require("fs").promises;
+const fsSync = require("fs");
 const path = require("path");
 const { Client, LocalAuth } = require("whatsapp-web.js");
-const { execSync } = require('child_process');
 const { computeHash, checkDuplicate, addToSeenHashes, loadSeenHashes } = require('./deduplication');
 
+// DEV SETTINGS
+const BYPASS_GROUP_CHECK = true;
 
 const LOG_ROOT = path.resolve(__dirname, "..", "logs");
-const apiUrl = `${process.env.API_URL}`;
-console.log('Using API_URL:', apiUrl);
+const apiUrl = `${process.env.API_BASE_URL}`;
+console.log('Using API_BASE_URL:', apiUrl);
 
 // Active groups cache - refreshed periodically from API
 let activeGroupIds = new Set();
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 10 * 60 * 1000; // 5 minutes
 
 // Reconnection strategy for unexpected disconnects/auth failures
 const MAX_RECONNECT_ATTEMPTS = Number(process.env.WWJS_MAX_RECONNECT_ATTEMPTS) || 10;
@@ -25,8 +31,8 @@ let reconnectAttempts = 0;
 let reconnectTimer = null;
 let initializing = false;
 
-// Save session locally to avoid scanning QR every time
-execSync(`rm -rf ./session/session/Singleton*`, {stdio: 'inherit'})
+// Clean stale Chromium singleton locks if present. Do not crash on permission issues.
+cleanupSingletonLocks("./session/session");
 const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: "./session"
@@ -77,12 +83,22 @@ client.on("message", async msg => {
     const senderPhone = contact.number || "Unknown";
     const groupId = isFromGroup ? msg.from : null;
     const groupName = isFromGroup ? chat.name : null;
+
+    // Handle media in messages
+    if (msg.hasMedia) {
+        try {
+            const media = await msg.downloadMedia();
+            console.log(`Message ${messageId} contains media of type ${media.mimetype} and size ${media.data.length} bytes.`);
+        } catch (err) {
+            console.error(`Failed to download media for message ${messageId}:`, err.message);
+        }
+    }
     
     // Skip if group is not active
-    // if (isFromGroup && groupId && !activeGroupIds.has(groupId)) {
-    //     console.log(`Skipping message from inactive group: ${groupName}`);
-    //     return;
-    // } 
+    if (!BYPASS_GROUP_CHECK && isFromGroup && groupId && !activeGroupIds.has(groupId)) {
+        console.log(`Skipping message from inactive group: ${groupName}`);
+        return;
+    } 
 
     // TODO: Direct message are always ingested, but we might want to filter them in the future based on sender or content
     
@@ -127,6 +143,25 @@ client.on("change_state", (state) => {
 
 
 client.initialize();
+
+function cleanupSingletonLocks(sessionDir) {
+    try {
+        const entries = fsSync.readdirSync(sessionDir);
+        for (const name of entries) {
+            if (!name.startsWith("Singleton")) continue;
+            const filePath = path.join(sessionDir, name);
+            try {
+                fsSync.rmSync(filePath, { force: true });
+            } catch (err) {
+                console.warn(`Could not remove ${filePath}: ${err.message}`);
+            }
+        }
+    } catch (err) {
+        if (err && err.code !== "ENOENT") {
+            console.warn(`Session lock cleanup skipped: ${err.message}`);
+        }
+    }
+}
 
 
 async function log_message(data) {

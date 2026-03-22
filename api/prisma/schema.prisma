@@ -8,10 +8,12 @@ datasource db {
 
 enum OfferingCategory {
   CLASS // Structured recurring sessions (yoga, language, etc.)
+  RETREAT // Multi-day immersive experiences
   WORKSHOP // One-off educational events
   GATHERING // Social events, markets, meetups
   SERVICE // Ongoing offerings (therapy, coaching)
   SALE // Items for sale
+  RENTAL // Items for rent
   OTHER // Doesn't fit other categories
 }
 
@@ -21,8 +23,38 @@ enum ParseStatus {
   PARSED_OK // Successfully parsed into Offering
   PARSED_PARTIAL // Parsed but missing key fields (e.g. no date)
   PARSED_NOOP // Parsed but determined to be non-offering (e.g. just a chat message)
-  DUPLICATE // Parsed but matches an existing offering
+  DUPLICATE // Matches an existing offering
+  // PARSED_DUPLICATE // Matches an existing offering after parsing
   FAILED // Parsing failed, check parseError
+}
+
+enum GroupType {
+  COUNTRY
+  REGION
+  CITY
+  VENUE
+  CHAT
+}
+
+enum AliasSource {
+  MANUAL
+  FUZZY_MATCH
+  GOOGLE_MAPS_URL
+  GOOGLE_PLACE
+}
+
+enum MediaType {
+  IMAGE
+}
+
+enum LocationSource {
+  GOOGLE_MAPS_URL
+  VENUE_MATCH
+  ALIAS_MATCH
+  GOOGLE_PLACE
+  GEOCODE
+  GROUP_FALLBACK
+  UNKNOWN
 }
 
 model Group {
@@ -30,15 +62,27 @@ model Group {
   whatsappId String @unique // WhatsApp's internal group ID
   name       String // Human-readable name
 
+  type GroupType
+
   // Location context (manually configured)
   country   String // e.g., "India", "Indonesia"
+  adminArea String? // e.g., "Goa", "Bali"
   city      String // e.g., "Arambol", "Ubud"
-  latitude  Float // City center latitude
-  longitude Float // City center longitude
   timezone  String? // e.g., "Asia/Kolkata", "Asia/Bali"
+  language  String? // e.g., "en", "hi", "id"
+
+  // Rough geolocation for the group
+  latitude  Float?
+  longitude Float?
+  location     Unsupported("geography(Point,4326)")?
+  radiusKm  Float?
 
   // Status
   active Boolean @default(true)
+
+  // Venue if applicable
+  venueId String?
+  venue   Venue?  @relation(fields: [venueId], references: [id])
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -46,9 +90,52 @@ model Group {
 
   // Relations
   rawMessages RawMessage[]
+  offerings   Offering[]
 
   @@index([country])
   @@index([city])
+}
+
+model Venue {
+  id String @id @default(cuid())
+
+  displayName    String
+  normalizedName String
+
+  address String?
+
+  latitude  Float
+  longitude Float
+  location     Unsupported("geography(Point,4326)")?
+
+  googlePlaceId String? @unique
+  mapsUrl       String?
+
+  aliases VenueAlias[]
+
+  groups    Group[]
+  offerings Offering[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VenueAlias {
+  id String @id @default(cuid())
+
+  alias           String
+  normalizedAlias String
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id])
+
+  source     AliasSource
+  confidence Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([normalizedAlias])
 }
 
 model RawMessage {
@@ -58,9 +145,9 @@ model RawMessage {
   // WhatsApp metadata
   messageId   String?   @unique
   senderId    String
+  groupId     String?
   senderPhone String?
   senderName  String?
-  groupId     String?
   timestamp   DateTime?
 
   // Content
@@ -71,7 +158,10 @@ model RawMessage {
   parsingStatus ParseStatus @default(PENDING)
   parsingNotes  String?
 
+  media Media[]
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   offerings Offering[]
@@ -83,6 +173,23 @@ model RawMessage {
   @@index([rawTextHash, createdAt])
 }
 
+model Media {
+  id String @id @default(cuid())
+
+  type MediaType
+
+  url      String
+  mimeType String?
+
+  rawMessageId String
+  rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
+
+  offerings Offering[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Offering {
   id          String           @id @default(cuid())
   category    OfferingCategory
@@ -92,13 +199,29 @@ model Offering {
   endTime     DateTime? // Full timestamp combining date + end time (timezone-aware)
   pricingType String? // e.g. "free", "fixed", "donation", "range"
   price       Json? // Flexible pricing info (e.g. { "amount": 10, "currency": "USD" })
-  location    String? // Freeform location text (e.g. "Arambol beach")
-  latitude    Float? // Geocoded latitude
-  longitude   Float? // Geocoded longitude
+
+  locationSource LocationSource
+  locationText   String? // Freeform extracted location text (e.g. "Arambol beach")
+  latitude       Float? // Geocoded latitude
+  longitude      Float? // Geocoded longitude
+  location     Unsupported("geography(Point,4326)")?
+
+  // Optional relation to a known venue
+  venueId String?
+  venue   Venue?  @relation(fields: [venueId], references: [id])
+
+  // Contextual group info
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
 
   // Original message reference
   rawMessageId String     @unique
   rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
 
-  createdAt DateTime @default(now())
+  media Media[]
+  links Json? // Extracted links from the message (e.g. [{ "url": "https://example.com", "type": "registration" }])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime? @default(dbgenerated("now() + interval '7 days'"))
 }

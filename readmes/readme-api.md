@@ -57,27 +57,9 @@ api/src/
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/offerings` | List parsed offerings with filters |
-| GET | `/offerings/:id` | Single offering with raw message |
+| GET | `/offerings/all` | List active offerings |
 | GET | `/offerings/nearby` | Find offerings within distance (PostGIS) |
-| GET | `/offerings/raw` | List raw messages (admin/review) |
-| GET | `/offerings/raw/:id` | Single raw message |
-| POST | `/offerings/raw/:id/reparse` | Retry parsing on failed message |
-| PATCH | `/offerings/:id` | Update offering (admin corrections) |
-
-**Query parameters for `GET /offerings`:**
-```
-?category=CLASS
-&country=India
-&region=Goa
-&city=Arambol
-&dateFrom=2025-01-01
-&dateTo=2025-12-31
-&search=yoga
-&tags=outdoor,beginners
-&page=1
-&limit=20
-```
+| GET | `/offerings/raw/all` | Deprecated raw message endpoint |
 
 **Query parameters for `GET /offerings/nearby`:**
 ```
@@ -86,6 +68,8 @@ api/src/
 &radiusKm=50
 &limit=20
 ```
+
+The implementation keeps `latitude` / `longitude` as Prisma scalar fields and uses a PostGIS `location geography(Point, 4326)` column for `ST_DWithin` and `ST_Distance` queries.
 
 ## Service Layer
 

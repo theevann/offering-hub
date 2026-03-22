@@ -2,11 +2,28 @@
 const express = require("express");
 
 const app = express();
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || "0.0.0.0";
+const corsOriginEnv = process.env.CORS_ORIGIN || "http://localhost:3001";
+const allowedOrigins = corsOriginEnv
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:3001");
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  const requestOrigin = req.headers.origin;
+  const allowAnyOrigin = allowedOrigins.includes("*");
+  const allowListedOrigin = requestOrigin && allowedOrigins.includes(requestOrigin);
+
+  if (allowAnyOrigin) {
+    res.header("Access-Control-Allow-Origin", "*");
+  } else if (allowListedOrigin) {
+    res.header("Access-Control-Allow-Origin", requestOrigin);
+    res.header("Vary", "Origin");
+  }
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
@@ -30,6 +47,23 @@ app.get("/", (req, res) => {
   res.send("API running");
 });
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+const server = app.listen(PORT, HOST, () => {
+  const address = server.address();
+
+  if (!address) {
+    console.error(`Server failed to bind on ${HOST}:${PORT}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`Server running on http://${address.address}:${address.port}`);
+});
+
+server.on("error", (error) => {
+  console.error(`Failed to start server on ${HOST}:${PORT}:`, error.message);
+  process.exit(1);
 });

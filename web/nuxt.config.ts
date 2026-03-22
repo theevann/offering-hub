@@ -5,8 +5,9 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
-    public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE
-    }
+    apiInternalBase: process.env.NUXT_API_INTERNAL_BASE,
+    // public: {
+    //   apiBase: process.env.API_BASE_URL
+    // }
   }
 })

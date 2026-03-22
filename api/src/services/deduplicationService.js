@@ -9,7 +9,9 @@ const TITLE_AUTO_DUPLICATE_THRESHOLD = 0.9;
 const TITLE_THRESHOLD = 0.6;
 const TITLE_COMBINED_THRESHOLD = 0.3;
 const DESC_COMBINED_THRESHOLD = 0.6;
-const DEDUP_LLM_PROVIDER = 'gpt_oss_120b';
+
+const DEDUP_MODEL = process.env.DEDUP_MODEL;
+console.log(`Using ${DEDUP_MODEL} for message deduplication.`)
 
 
 function normalize(text = '') {
@@ -38,14 +40,15 @@ function overlapCoefficient(a, b) {
   return intersection / Math.min(setA.size, setB.size);
 }
 
-async function isDuplicate(parsed, startTime, endTime, group) {
-  if (!parsed.category || !startTime) return false;
+async function isDuplicate(parsed, startTime, endTime, group, locationInfo) {
+  // TODO: We could do a location based pre-filter / distance based
 
   const existingOfferings = await prisma.offering.findMany({
     where: {
       category: parsed.category,
-      startTime,
+      startTime: startTime || null,
       endTime: endTime || null,
+      venueId: locationInfo.venueId || null,
       rawMessage: {
         group: {
           country: group?.country || null,
@@ -85,7 +88,7 @@ async function isDuplicate(parsed, startTime, endTime, group) {
 
   const userPrompt = `Here is a new offering parsed from a message:\nTitle: ${parsed.title}\nDescription: ${parsed.description}\nStart Time: ${startTime}\nEnd Time: ${endTime}\n\nHere are existing similar offerings:\n${candidates.map(o => o.offering).map(o => `Title: ${o.title}\nDescription: ${o.description}\nStart Time: ${o.startTime}\nEnd Time: ${o.endTime}\n---`).join('\n')}\n\nBased on the details, is the new offering a duplicate of any of the existing offerings? Answer in json format ONLY with a boolean field "isDuplicate" and a "reason" field explaining the decision.`;
 
-  const llmResponse = await callLLM(systemPrompt, userPrompt, provider = DEDUP_LLM_PROVIDER, asJson = true);
+  const llmResponse = await callLLM(systemPrompt, userPrompt, provider = DEDUP_MODEL, asJson = true);
 
   return llmResponse.isDuplicate;
 }
@@ -102,10 +105,12 @@ async function findRecentExactDuplicate(rawTextHash) {
     Date.now() - EXACT_DEDUP_DAYS * 24 * 60 * 60 * 1000
   );
 
+  console.log(`Checking for recent duplicates with hash ${rawTextHash} since ${cutoffDate.toISOString()}`);
+
   return prisma.rawMessage.findFirst({
     where: {
       rawTextHash,
-      createdAt: { gte: cutoffDate }
+      createdAt: { gte: cutoffDate },
     },
     orderBy: { createdAt: "desc" },
     select: { id: true, createdAt: true }

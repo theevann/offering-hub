@@ -1,0 +1,58 @@
+services:
+  api-migrate:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      target: prod-migrate
+    container_name: offerings_api_migrate
+    command: ["npm", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      NODE_ENV: production
+    env_file:
+      - ./api.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      target: prod-runtime
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: production
+    env_file:
+      - ./api.env
+    depends_on:
+      db:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+
+  bot:
+    build:
+      target: prod-runtime
+    # restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    env_file:
+      - ./bot.env
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: offerings_web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    env_file:
+      - ./web.env
+    depends_on:
+      - api
+    ports:
+      - "80:3001"

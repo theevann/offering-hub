@@ -2,6 +2,7 @@
 # Do NOT ignore package.json or package-lock.json
 
 logs
+session
 node_modules
 npm-debug.log
 yarn-debug.log

@@ -7,7 +7,9 @@
  * Make sure DEEPSEEK_API_KEY is set in api/.env
  */
 
-require('dotenv').config({ path: __dirname + '/../../.env' });
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: __dirname + '/../../.env' });
+}
 const { parse } = require('./parsingService');
 
 // Test cases

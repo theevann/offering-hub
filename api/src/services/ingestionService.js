@@ -1,24 +1,28 @@
 const prisma = require("../db/prismaClient");
 const parsingService = require("./parsingService");
+const { resolveLocation } = require("./locationService");
 const { isDuplicate, computeRawTextHash, findRecentExactDuplicate } = require("./deduplicationService");
 const { DateTime } = require("luxon");
-const { raw } = require("express");
+
+const DEDUPLICATE = false;
 
 // Default location for new groups (Da Nang, Vietnam)
-const DEFAULT_GROUP_LOCATION = {
-  country: "Vietnam",
-  city: "Da Nang",
-  latitude: 16.0544,
-  longitude: 108.2022,
-  timezone: "Asia/Ho_Chi_Minh"
-};
 // const DEFAULT_GROUP_LOCATION = {
-//   country: 'Sri Lanka',
-//   city: 'Midigama',
-//   latitude: 5.9333,
-//   longitude: 80.4167,
-//   timezone: 'Asia/Colombo'
+//   country: "Vietnam",
+//   city: "Da Nang",
+//   latitude: 16.0544,
+//   longitude: 108.2022,
+//   timezone: "Asia/Ho_Chi_Minh"
 // };
+const DEFAULT_GROUP_LOCATION = {
+  type: 'REGION',
+  country: 'Sri Lanka',
+  city: 'Midigama',
+  adminArea: 'Southern Province',
+  latitude: 5.965235,
+  longitude: 80.39111,
+  timezone: 'Asia/Colombo'
+};
 
 async function getOrCreateGroup(whatsappId, groupName) {
   if (!whatsappId) return null;
@@ -34,7 +38,9 @@ async function getOrCreateGroup(whatsappId, groupName) {
       data: {
         whatsappId,
         name: groupName || whatsappId,
+        type: DEFAULT_GROUP_LOCATION.type,
         country: DEFAULT_GROUP_LOCATION.country,
+        adminArea: DEFAULT_GROUP_LOCATION.adminArea,
         city: DEFAULT_GROUP_LOCATION.city,
         latitude: DEFAULT_GROUP_LOCATION.latitude,
         longitude: DEFAULT_GROUP_LOCATION.longitude,
@@ -94,10 +100,10 @@ async function ingestRawMessage(data) {
     };
   }
   
-  const previousExactMatch = await findRecentExactDuplicate(rawTextHash);
+  const previousExactMatch = DEDUPLICATE ? await findRecentExactDuplicate(rawTextHash) : null;
   if (previousExactMatch) {
     console.log(
-      `Exact rawText duplicate detected for message with ${source} ID ${messageId} (matches rawMessage ${previousExactMatch.id}) - Ignoring`
+      `Exact rawText duplicate detected for message with ${source} ID ${messageId} (matches rawMessage ${previousExactMatch.id} on ${previousExactMatch.createdAt.toISOString()}) - Ignoring`
     );
     return {
       rawMessage: null,
@@ -132,9 +138,17 @@ async function ingestRawMessage(data) {
     const timezone = rawMessage.group?.timezone || 'UTC';
     const startTime = convertToDatetime(parsed.date, parsed.startTime, timezone, true);
     const endTime = convertToDatetime(parsed.date, parsed.endTime, timezone, false);
+    const offeringGroupId = rawMessage.groupId || group?.id || null;
 
-    const offeringExists = await isDuplicate(parsed, startTime, endTime, group);
+    if (!offeringGroupId) {
+      throw new Error(`Cannot create offering without groupId for rawMessage ${rawMessage.id}`);
+    }
+
+    const locationInfo = await resolveLocation(parsed.location, group);
+
+    const offeringExists = DEDUPLICATE ? await isDuplicate(parsed, startTime, endTime, group, locationInfo) : false;
     if (!offeringExists) {
+
       offering = await prisma.offering.create({
         data: {
           category: parsed.category,
@@ -144,10 +158,15 @@ async function ingestRawMessage(data) {
           endTime,
           pricingType: parsed.pricingType,
           price: parsed.price,
-          location: parsed.location,
-          latitude: parsed.latitude,
-          longitude: parsed.longitude,
-          rawMessageId: rawMessage.id
+          links: parsed.links,
+          locationSource: locationInfo.source,
+          locationText: parsed.location.rawLocationText,
+          latitude: locationInfo.latitude,
+          longitude: locationInfo.longitude,
+          venueId: locationInfo.venueId ?? null,
+          groupId: offeringGroupId,
+          rawMessageId: rawMessage.id,
+          expiresAt: endTime || DateTime.now().plus({ days: 7 }).toJSDate()
         }
       });
 
@@ -155,7 +174,7 @@ async function ingestRawMessage(data) {
     } else {
       console.log(`Duplicate offering detected for message ${rawMessage.id} - skipping creation`);
       parsingStatus = 'DUPLICATE';
-      parsingNotes = 'Parsed offering matches an existing offering based on category, date and time. Marked as duplicate.';
+      parsingNotes = 'Parsed offering matches an existing offering based on category, location, date and time. Marked as duplicate.';
     }
   }
 

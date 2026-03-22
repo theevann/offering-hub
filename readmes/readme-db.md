@@ -10,20 +10,21 @@ The database uses two main tables: `RawMessage` and `Offering`. This separation 
 
 ## PostGIS Setup
 
-PostGIS is required for distance-based queries. Enable it once:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS postgis;
-```
-
-In docker-compose, ensure the postgres image supports PostGIS, or add initialization:
+PostGIS is part of the initial schema, not a manual follow-up step. Use a PostGIS-capable image in Compose:
 
 ```yaml
 db:
   image: postgis/postgis:16-3.4-alpine
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
 ```
 
-Or use standard postgres and run the CREATE EXTENSION command manually.
+The initial migration:
+- creates `postgis`
+- adds `location geography(Point, 4326)` to `Group`, `Venue`, and `Offering`
+- backfills geography values from `latitude` / `longitude`
+- adds triggers that keep scalar coords and geography in sync
+- creates GIST indexes for nearby queries
 
 ## Full Prisma Schema
 
@@ -226,39 +227,14 @@ npx prisma generate
 npx prisma migrate dev --name init
 ```
 
-### Enable PostGIS (after first migration)
+### Fresh Bootstrap
 
 ```bash
-# Connect to database
-docker exec -it offerings_db psql -U offerings_user -d offerings_db
-
-# Enable extension
-CREATE EXTENSION IF NOT EXISTS postgis;
-
-# Verify
-SELECT PostGIS_Version();
-```
-
-### Schema Changes
-
-```bash
-# After modifying schema.prisma:
-npx prisma migrate dev --name add_location_fields
-
-# This will:
-# 1. Generate migration SQL
-# 2. Apply to database
-# 3. Regenerate Prisma client
-```
-
-### Reset During Development
-
-```bash
-# ⚠️ Destroys all data, applies all migrations fresh
-npx prisma migrate reset
-
-# Re-enable PostGIS after reset
-docker exec -it offerings_db psql -U offerings_user -d offerings_db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+cd api
+npx prisma migrate deploy
+npx prisma generate
 ```
 
 ## Query Patterns

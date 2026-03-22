@@ -86,7 +86,7 @@ client.on("message", async msg => {
   }
   
   // Send to API
-  await axios.post(`${API_URL}/ingest`, data)
+  await axios.post(`${API_BASE_URL}/ingest`, data)
 })
 ```
 
@@ -136,7 +136,7 @@ async function log_message(data) {
 ```js
 client.on("message", async msg => {
   try {
-    await axios.post(`${API_URL}/ingest`, data)
+    await axios.post(`${API_BASE_URL}/ingest`, data)
     console.log("Message sent to API")
   } catch (err) {
     console.error("Error sending message to API:", err.message)
@@ -192,8 +192,8 @@ bot:
 ## Environment Variables
 
 ```env
-API_URL=http://api:3000  # Docker network
-# API_URL=http://localhost:3000  # Local dev
+API_BASE_URL=http://api:3000  # Docker network
+# API_BASE_URL=http://localhost:3000  # Local dev
 ```
 
 ## Development Workflow
@@ -292,5 +292,5 @@ client.on("message", async msg => {
 | QR not appearing          | Check terminal logs, ensure TTY available  |
 | Chromium crash in Docker  | Ensure `shm_size: "1gb"` in docker-compose |
 | Session lost on restart   | Check volume mounts for `/app/session`     |
-| Messages not reaching API | Check API_URL env var, API logs            |
+| Messages not reaching API | Check API_BASE_URL env var, API logs            |
 | Puppeteer timeout         | Increase timeout, check memory limits      |

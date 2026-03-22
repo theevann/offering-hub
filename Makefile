@@ -1,10 +1,10 @@
 # Start development environment
 dev:
-	docker compose up -d db
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 
 # Start development environment containerized
 devc:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 # Start production environment
 prod:

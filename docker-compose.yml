@@ -1,40 +1,47 @@
 services:
   db:
-    image: postgres:18
+    image: postgis/postgis:16-3.4-alpine
     container_name: offerings_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: offerings_user
-      POSTGRES_PASSWORD: offerings_pass
-      POSTGRES_DB: offerings_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
     volumes:
-      - postgres_data:/var/lib/postgresql/
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   api:
-    build: ./api
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     container_name: offerings_api
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://offerings_user:offerings_pass@db:5432/offerings_db
-    depends_on:
-      - db
 
   bot:
     build: ./bot
-    shm_size: "1gb"
     container_name: offerings_bot
-    restart: always
-    environment:
-      API_URL: http://api:3000
+    shm_size: "1gb"
     depends_on:
       - api
     volumes:
       - bot_session:/app/session
       - bot_logs:/app/logs
+
+  # web:
+  #   build: ./web
+  #   container_name: offerings_frontend
+  #   restart: always
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     API_BASE_URL: http://api:3000
+  #   depends_on:
+  #     - api
 
 volumes:
   postgres_data:

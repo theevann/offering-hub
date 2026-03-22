@@ -1,10 +1,38 @@
 services:
+  db:
+    platform: linux/amd64
+    ports:
+      - "5432:5432"
+
   api:
+    build:
+      target: dev
+    ports:
+      - "3000:3000"
     volumes:
       - ./api:/app
-    command: npm run dev:docker
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
+    depends_on:
+      db:
+        condition: service_healthy
 
   bot:
+    build:
+      target: dev
     volumes:
       - ./bot/src:/app/src
-    command: npm run dev
+    environment:
+      NODE_ENV: development
+      API_BASE_URL: http://api:3000
+    env_file:
+      - ./bot/.env
+
+  # web:
+  #   volumes:
+  #     - ./web:/app
+  #   environment:
+  #     NODE_ENV: development
+  #   command: npm run dev

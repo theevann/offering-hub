@@ -165,10 +165,10 @@ export interface NearbyQuery {
 ```ts
 import type { Offering, RawMessage, OfferingFilters, NearbyQuery } from '~/types'
 
-const API_URL = useRuntimeConfig().public.apiUrl
+const API_BASE_URL = useRuntimeConfig().public.apiUrl
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -543,7 +543,7 @@ watch(() => props.selectedCountry, (country) => {
 `.env`:
 
 ```env
-NUXT_PUBLIC_API_URL=http://localhost:3000
+API_BASE_URL=http://localhost:3000
 NUXT_PUBLIC_MAPBOX_TOKEN=pk.xxx
 ADMIN_PASSWORD=your-secret-password
 ```
@@ -559,7 +559,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     adminPassword: process.env.ADMIN_PASSWORD,
     public: {
-      apiUrl: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:3000',
+      apiUrl: process.env.API_BASE_URL || 'http://localhost:3000',
       mapboxToken: process.env.NUXT_PUBLIC_MAPBOX_TOKEN,
     },
   },
@@ -578,7 +578,7 @@ web:
   ports:
     - "3001:3000"
   environment:
-    NUXT_PUBLIC_API_URL: http://api:3000
+    API_BASE_URL: http://api:3000
     NUXT_PUBLIC_MAPBOX_TOKEN: ${MAPBOX_TOKEN}
     ADMIN_PASSWORD: ${ADMIN_PASSWORD}
   depends_on:

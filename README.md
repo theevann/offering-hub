@@ -147,12 +147,16 @@ coie/
 ### Local Development
 
 ```bash
+# If you are resetting from the old plain-Postgres setup
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+
 # Start database only
-docker-compose up -d db
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 
 # Run API locally
 cd api
 npm install
+npx prisma migrate deploy
 npx prisma generate
 npm run dev
 
@@ -170,17 +174,19 @@ npm run dev
 ### Database Management
 
 ```bash
-# Enable PostGIS (first time only)
-docker exec -it offerings_db psql -U offerings_user -d offerings_db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
-
 # Access PostgreSQL
 docker exec -it offerings_db psql -U offerings_user -d offerings_db
+
+# Verify PostGIS
+docker exec -it offerings_db psql -U offerings_user -d offerings_db -c "SELECT PostGIS_Version();"
 
 # Prisma migrations
 cd api
 npx prisma migrate dev --name descriptive_change
 npx prisma studio  # GUI to view data
 ```
+
+The initial migration creates `postgis`, adds `geography(Point, 4326)` columns to `Group`, `Venue`, and `Offering`, and keeps scalar `latitude` / `longitude` fields for Prisma compatibility.
 
 ## Documentation
 
@@ -204,16 +210,19 @@ LLM_API_KEY=sk-...
 # Geocoding Provider
 GEOCODING_PROVIDER=mapbox    # or 'nominatim' (free)
 MAPBOX_TOKEN=pk.xxx          # required if using mapbox
+
+# Google Places Text Search (location fallback in api/src/services/locationService.js)
+GOOGLE_MAPS_API_KEY=AIza...
 ```
 
 ### Bot
 ```env
-API_URL=http://api:3000
+API_BASE_URL=http://api:3000
 ```
 
 ### Web
 ```env
-NUXT_PUBLIC_API_URL=http://localhost:3000
+API_BASE_URL=http://localhost:3000
 NUXT_PUBLIC_MAPBOX_TOKEN=pk.xxx
 ADMIN_PASSWORD=your-secret-password
 ```
@@ -223,12 +232,9 @@ ADMIN_PASSWORD=your-secret-password
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/ingest` | Receive raw message from bot |
-| GET | `/offerings` | List offerings with filters |
-| GET | `/offerings/:id` | Single offering |
+| GET | `/offerings/all` | List active offerings |
 | GET | `/offerings/nearby` | Distance-based search (PostGIS) |
-| GET | `/offerings/raw` | List raw messages |
-| POST | `/offerings/raw/:id/reparse` | Retry parsing |
-| PATCH | `/offerings/:id` | Update offering (admin) |
+| GET | `/offerings/raw/all` | Deprecated raw message endpoint |
 
 ## Status
 

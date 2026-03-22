@@ -1,17 +1,19 @@
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
 const { callLLM } = require('./llmService');
 
-// Choose between 'deepseek', 'minimax', 'gpt_oss_120b', 'qwen3'
-const PARSER_LLM_PROVIDER = 'gpt_oss_120b';
+const PARSER_MODEL = process.env.PARSER_MODEL;
+console.log(`Using ${PARSER_MODEL} for message parsing`)
 
-const VALID_CATEGORIES = ['CLASS', 'WORKSHOP', 'GATHERING', 'SERVICE', 'SALE', 'OTHER'];
+const VALID_CATEGORIES = ['CLASS', 'RETREAT', 'WORKSHOP', 'GATHERING', 'SERVICE', 'SALE', 'RENTAL', 'OTHER'];
 
 const SYSTEM_PROMPT = `You are a message parser. Extract structured data from the given message.
 Return ONLY a valid JSON object with these fields:
-- category: one of ${VALID_CATEGORIES.map(c => `"${c}"`).join(', ')} (use CLASS for structured recurring sessions like yoga, WORKSHOP for one-off educational events, GATHERING for social events, SERVICE for ongoing offerings, SALE for items for sale, OTHER if unclear)
+- category: one of ${VALID_CATEGORIES.map(c => `"${c}"`).join(', ')} (use CLASS for structured recurring sessions like yoga, RETREAT for multi-day immersive experiences, WORKSHOP for one-off educational events, GATHERING for social events, SERVICE for ongoing offerings, SALE for items for sale, OTHER if unclear)
 - title: a short title for the message (max 100 chars)
 - description: Summarize the main content/description. Remove WhatsApp specific artifacts.
-- date: YYYY-MM-DD if a date is mentioned, null otherwise
+- date: YYYY-MM-DD if a date is mentioned, null otherwise. If the message mentions a recurrent event (e.g. "every Monday"), return the next upcoming date. If only a day is mentioned (e.g. "this Saturday"), infer the date based on the message timestamp.
 - startTime: HH:MM 24H format if a start time is mentioned, null otherwise
 - endTime: HH:MM 24H format if an end time or duration is mentioned, null otherwise
 - pricingType: one of "free", "fixed", "donation", "range" if price info is mentioned, null otherwise. Note: if a message mention a seemingly mandatory donation amount, treat it as "fixed" pricing type.
@@ -19,7 +21,8 @@ Return ONLY a valid JSON object with these fields:
   - if fixed price: { "amount": 10, "currency": "USD" }
   - if price range: { "minAmount": 5000, "maxAmount": 15000, "currency": "LKR" }
   - if different pricing for different attendees: { "options": [ { "description": "locals", "amount": 5, "currency": "EUR" }, { "description": "tourists", "amount": 15, "currency": "EUR" } ] }
-- location: freeform location text if mentioned, null otherwise
+- location: object with { "locationName": "", "addressFragment": "", "url": "", "isVenueLikelihood": 1, "rawLocationText": ""} - if any location info is mentioned, empty strings otherwise. locationName is a concise name for the location (e.g. "Green Garden Cafe"), addressFragment is any extracted address info (e.g. "123 Main St"), rawLocationText is the full original text from the message that seems to refer to location (e.g. "at the usual spot"), url is a relevant location URL (e.g. google maps link) if mentioned, isVenueLikelihood is a float number between 0 and 1 indicating how likely this location refers to an existing venue.
+- links: array of objects with { "url": "", "type": ""} for any relevant links mentioned in the message. Type should be one of "maps", "booking", "social", "website", "other" based on the content of the link.
 - parsingStatus: "PARSED_OK" if all key info is extracted, "PARSED_PARTIAL" if some info is missing, "PARSED_NOOP" if message is not an offering, "FAILED" if parsing failed
 - parsingNotes: optional field for any notes about the parsing status
 
@@ -89,13 +92,14 @@ function formatTimestamp(timestamp, timezone) {
  */
 function prepare_prompts(messageInfo, groupInfo) {
   const { rawText, msgDatetime } = messageInfo;
-  const { groupName, groupCity, groupCountry } = groupInfo;
+  const { groupName, groupCity, groupArea, groupCountry } = groupInfo;
 
   const contextParts = [];
   if (groupName) contextParts.push(`Group: "${groupName}"`);
   if (msgDatetime) contextParts.push(`Message Timestamp: ${msgDatetime}`);
-  if (groupCity) contextParts.push(`City: ${groupCity}`);
-  if (groupCountry) contextParts.push(`Country: ${groupCountry}`);
+  if (groupCountry) contextParts.push(`Group Country: ${groupCountry}`);
+  if (groupArea) contextParts.push(`Group Area: ${groupArea}`);
+  if (groupCity) contextParts.push(`Group City: ${groupCity}`);
   
   const contextPrefix = contextParts.length > 0 
     ? `Context (this message is from a WhatsApp group:\n${contextParts.join('\n')}):\n\n` 
@@ -123,12 +127,13 @@ async function parse({ rawText, timestamp, group }) {
     const groupInfo = {
       groupName: group?.name || null,
       groupCity: group?.city || null,
+      groupArea: group?.adminArea || null,
       groupCountry: group?.country || null
     };
     
     // Call AI provider (can be swapped for other providers)
     const { system_prompt, user_prompt } = prepare_prompts(messageInfo, groupInfo);
-    const parsedContent = await callLLM(system_prompt, user_prompt, PARSER_LLM_PROVIDER);
+    const parsedContent = await callLLM(system_prompt, user_prompt, PARSER_MODEL);
     // const parsedContent = {
     //   "category": "GATHERING",
     //   "title": "Acro Jam Session & Aerials",
@@ -142,6 +147,34 @@ async function parse({ rawText, timestamp, group }) {
     //   "parsingStatus": "PARSED_PARTIAL",
     //   "parsingNotes": "Date inferred from 'tomorrow' relative to message timestamp (2026-02-19). No pricing or end time mentioned."
     // };
+    // const parsedContent = {
+    //   "category": "CLASS",
+    //   "title": "Kundalini Activation Shaktipat Session",
+    //   "description": "A Kundalini Activation Shaktipat session guided by David Tur at Zenky House in Ahangama on March 10, 2026 from 17:00 to 19:00. Participants lie down and receive energy transmission to release blockages. No prior experience required; arrive 15 minutes early. Energy exchange fee 5,000 LKR.",
+    //   "date": "2026-03-10",
+    //   "startTime": "17:00",
+    //   "endTime": "19:00",
+    //   "pricingType": "fixed",
+    //   "price": {
+    //     "amount": 5000,
+    //     "currency": "LKR"
+    //   },
+    //   "location": {
+    //     "locationName": "Zenky House",
+    //     "addressFragment": "Ahangama",
+    //     "url": "https://maps.app.goo.gl/pw8ysuQnobCcgMsMA",
+    //     "isVenueLikelihood": 0.9,
+    //     "rawLocationText": "Zenky House – Ahangama"
+    //   },
+    //   "links": [
+    //     {
+    //       "url": "https://www.instagram.com/kundaliniserpent/",
+    //       "type": "social"
+    //     }
+    //   ],
+    //   "parsingStatus": "PARSED_OK",
+    //   "parsingNotes": ""
+    // };
 
     const parsed = {
       category: normalizeCategory(parsedContent.category),
@@ -153,6 +186,7 @@ async function parse({ rawText, timestamp, group }) {
       pricingType: parsedContent.pricingType || null,
       price: parsedContent.price || null,
       location: parsedContent.location || null,
+      links: parsedContent.links || null,
       latitude: null,
       longitude: null
     };
