@@ -1,6 +1,6 @@
 # Examples to try against the model
 
-Board: [todos.md](todos.md)
+Board: [todos.kanban](todos.kanban)
 
 
 ## Examples

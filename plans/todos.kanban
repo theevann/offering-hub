@@ -1,0 +1,319 @@
+{
+  "lists": [
+    {
+      "id": "fb760466-0a72-4ed5-ae4a-4006807a4b28",
+      "title": "Bot",
+      "cards": [
+        {
+          "id": "0089af7c-f4ca-4689-9015-c83b98303e5e",
+          "listId": "fb760466-0a72-4ed5-ae4a-4006807a4b28",
+          "title": "Allow replay of bot messages that failed to reach the API",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+      "title": "API",
+      "cards": [
+        {
+          "id": "b2df85f1-f197-4a79-b159-5162f3cafb4f",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Decide category-specific expiresAt defaults; currently endTime or seven days after creation",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "20310332-f867-4f8e-b918-f2b3aab78002",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Secure the groups and ingest endpoints",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ed2366d5-1976-4f55-9090-419d8b8a6d00",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Build proper logger for all requests and responses",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
+      "title": "Frontend",
+      "cards": [
+        {
+          "id": "a12bc2ac-e04d-4957-87cb-ba09be13844e",
+          "listId": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
+          "title": "Design a location-first frontend with server-side location filtering",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "aa4fefd7-c3e5-4eaa-8f89-9ef3af01a3a5",
+          "listId": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
+          "title": "Clarify the frontend “created at time” requirement",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
+      "title": "Deduplication",
+      "cards": [
+        {
+          "id": "9b6a52b7-fd03-4f09-8218-9752b22b1911",
+          "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
+          "title": "Return the full LLM response from deduplication",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "e46d4533-4179-4f5b-aa21-5cf82c222a4b",
+          "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
+          "title": "Adapt deduplication by category; for undated offerings, check same-category offerings that have not expired",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "38d6f2c0-6e8c-4d80-830f-c3fb338ae250",
+          "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
+          "title": "Use expiry time in deduplication",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "6a3c0ad3-517e-4a55-884e-a0d2434bb539",
+          "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
+          "title": "If a duplicate is found, also maybe merge info !",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "abee4463-773d-446f-b658-5afd84d3ee19",
+      "title": "Location",
+      "cards": [
+        {
+          "id": "88deb5d9-1646-4451-b3ab-7f9395c163cd",
+          "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
+          "title": "Keep a google maps search cache / history",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "225250dc-c8e5-484f-b409-c7d3b4456e76",
+          "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
+          "title": "Extract locations from Google Maps links in messages",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "a5e18ea6-e9b5-476c-9e57-a03b8fc05064",
+          "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
+          "title": "Evaluate bounding-box prefiltering before ST_DWithin: location && ST_Expand(user_location.geom, radiusMeters)",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+      "title": "Parsing",
+      "cards": [
+        {
+          "id": "5baed48e-c80d-4c3f-8938-4ba0f0f3bbec",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Handle SALE and RENTAL start/end dates",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "0eaaf6b5-e9d5-4a51-8d38-a4c329012791",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Handle events spanning multiple days",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "cf827172-582b-41ef-b9aa-392da2b81ed4",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Define and extract offering tags such as meditation, yoga, breathwork, and ecstatic dance",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "72f8ae4e-d0c2-4c63-b32e-169d16bf74e4",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Add group descriptions and rules/info to the group model and parsing context",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "215337fd-33a0-465b-afcb-291e37846d13",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Parse and store advice",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "23f393d6-b21a-4586-9c1c-04907a8289ff",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Validate date handling against the [example messages](todo-notes.md#examples), including February 23/24, 2026 and PARSE_PARTIAL for uncertain dates",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "6ef52b65-0366-4a1f-9fa6-4f94de902945",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Add an optional per-group cheap-model offering pre-check returning : the offerings if there are <3 of them. A call for a bigger model if there are > 3.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "74a4db2f-75b1-4564-9fe5-a069a09bde7f",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Combine multipart messages from the same user and group within a proposed two-minute window",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "0fb208bc-e483-4773-b920-93024e80a324",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Parse contact information, including phone and email",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "5f1f08ca-9fc3-4e8f-b5fb-2ee946c0f5fe",
+      "title": "In Progress",
+      "cards": []
+    },
+    {
+      "id": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+      "title": "Done",
+      "cards": [
+        {
+          "id": "da160a50-52fa-44f9-ad44-f994d2682fbd",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Make a Trello-like board with linked [implementation notes and examples](todo-notes.md)",
+          "description": "Make a Trello-like board with linked [implementation notes and examples](todo-notes.md)",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "70bdbf44-f00e-4ba6-b23a-fab5c4524d57",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Skip parsing exact duplicates or messages with fewer than 50 characters and no image",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ebf6ed0f-5233-404a-8ad6-fdd268f4053f",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Implement the parsing stage",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "70b4ad0f-56e6-476c-b697-80f2e7dd6d1b",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Check for deduplication when date, time, and category match",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "8c576a12-8362-4672-af08-9b42df2d8a19",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Handle recurring events, adding occurrences only for the next week",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "d6660f0f-b678-44c3-b1f2-aa0a3c713023",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Handle one raw message producing multiple offerings",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "3eadb57a-c48a-49e4-955d-3189a7995f40",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Add startTimePrecision: unknown, wholeDay, fixedTime",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    }
+  ],
+  "archive": {
+    "lists": [],
+    "cards": []
+  },
+  "settings": {
+    "labels": []
+  }
+}
