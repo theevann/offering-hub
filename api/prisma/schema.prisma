@@ -138,7 +138,7 @@ model VenueAlias {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // @@unique([venueId, normalizedAlias]) // Could happen that two different venues have the same alias, eg in different countries
+  @@unique([venueId, normalizedAlias]) // Could happen that two different venues have the same alias, eg in different countries
 }
 
 model RawMessage {
@@ -220,7 +220,7 @@ model Offering {
   group   Group  @relation(fields: [groupId], references: [id])
 
   // Original message reference
-  rawMessageId String     @unique
+  rawMessageId String
   rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
 
   media Media[]
@@ -230,4 +230,6 @@ model Offering {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   expiresAt DateTime? @default(dbgenerated("now() + interval '7 days'"))
+  
+  @@index([rawMessageId])
 }

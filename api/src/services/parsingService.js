@@ -13,59 +13,51 @@ log.info(`Using ${VISION_MODELS.join(", ")} for vision processing`)
 
 const VALID_CATEGORIES = ['CLASS', 'RETREAT', 'WORKSHOP', 'GATHERING', 'SERVICE', 'SALE', 'RENTAL', 'OTHER'];
 
-const SYSTEM_PROMPT = `You are a message parser. Extract structured data from the given message.
-Return ONLY a valid JSON object with these fields:
-- category: one of ${VALID_CATEGORIES.map(c => `"${c}"`).join(', ')} (use CLASS for structured recurring sessions like yoga, RETREAT for multi-day immersive experiences, WORKSHOP for one-off educational events, GATHERING for social events, SERVICE for ongoing offerings, SALE for items for sale, OTHER if unclear)
-- title: a short title for the message (max 100 chars)
-- description: Summarize the main content/description. Remove WhatsApp specific artifacts.
-- dateStart: YYYY-MM-DD if a starting date is mentioned, null otherwise. If the message mentions a recurrent event (e.g. "every Monday"), return the next upcoming date. If only a day is mentioned (e.g. "this Saturday"), infer the date based on the message timestamp.
-- dateEnd: YYYY-MM-DD if an end date is mentioned (e.g. for retreats or sales), null otherwise
-- startTime: HH:MM 24H format if a start time is mentioned, null otherwise
-- endTime: HH:MM 24H format if an end time or duration is mentioned, null otherwise
-- startTimePrecision: one of "unknown", "wholeDay", "fixedTime" (use "unknown" if no time is mentioned, "wholeDay" if the message implies an all-day event, and "fixedTime" if a specific time is mentioned)
-- pricingType: one of "free", "fixed", "donation", "range" if price info is mentioned, null otherwise. Note: if a message mention a seemingly mandatory donation amount, treat it as "fixed" pricing type.
-- price: object with price details if mentioned, null otherwise. For example:
-  - if fixed price: { "amount": 10, "currency": "USD" }
-  - if price range: { "minAmount": 5000, "maxAmount": 15000, "currency": "LKR" }
-  - if different pricing for different attendees: { "options": [ { "description": "locals", "amount": 5, "currency": "EUR" }, { "description": "tourists", "amount": 15, "currency": "EUR" } ] }
-- location: an object with:
-  - locationName: the name of the place where the offering takes place
-  - addressFragment: street address, neighborhood, or directions, EXCLUDING city, administrative area, and country
-  - city: explicitly mentioned city or town
-  - adminArea: explicitly mentioned administrative area, such as a
-    state, province, or region
-  - country: explicitly mentioned country
-  - url: a location URL provided in the message (e.g. Google Maps link)
-  - rawLocationText: the original text describing the offering's location
-Use null for missing fields. Extract the location of the offering, not an unrelated location mentioned in the message. Do not fill location fields from the WhatsApp group context. DO NOT INFER MISSING GEOGRAPHICAL FIELDS FROM YOUR GENERAL KNOWLEDGE. Preserve explicit location information even when it differs from the group.
-- links: array of objects with { "url": "", "type": ""} for any relevant links mentioned in the message. Type should be one of "maps", "booking", "social", "website", "other" based on the content of the link.
-- parsingStatus: "PARSED_OK" if all key info is extracted, "PARSED_PARTIAL" if some info is missing, "PARSED_NOOP" if message is not an offering, "FAILED" if parsing failed
-- parsingNotes: optional field for any notes about the parsing status
-
-Only return the JSON object, do not include any explanatory text. If the message does not contain an offering or relevant info, return a JSON object with all fields null except category which should be "OTHER" and parsingStatus which should be "PARSED_NOOP".
-Do not include any text outside the JSON object, do not include any formatting, only return the raw JSON.`;
-
-
-/**
- * Create a default parsed object with raw text
- * @param {string} rawText - The raw message text
- * @returns {Object} - Default parsed object
- */
-function createDefaultParsed() {
-    return {
-        category: 'OTHER',
-        title: null,
-        description: null,
-        date: null,
-        startTime: null,
-        endTime: null,
-        pricingType: null,
-        price: null,
-        location: null,
-        latitude: null,
-        longitude: null
-    };
+const SYSTEM_PROMPT = `Extract offerings from the message and any attached images. Return only valid JSON:
+{
+  "offerings": [],
+  "parsingStatus": "PARSED_OK",
+  "parsingNotes": null
 }
+
+Splitting and recurrence rules:
+
+- Extract each independently attendable event or distinct listing separately.
+- A recurring session MUST produce one offering PER OCCURRENCE, never one offering spanning the schedule. Multiple sessions on one day produce multiple offerings.
+- With explicit date bounds, expand every matching occurrence within those bounds, inclusive.
+- Without explicit date bounds, expand recurrence over the 7 calendar dates from the message date through message date + 6 days, inclusive. Use this same window for "this week" unless explicit dates specify otherwise.
+- Each occurrence has its own dateStart and dateEnd, normally the same date. NEVER use the schedule's first and last dates as one offering's date range.
+- Example: "Yoga daily at 9am and 5pm", timestamp 2026-09-20, produces 14 offerings: 2 per day from September 20–26. Each has dateStart = dateEnd = its session date. Returning 2 offerings spanning September 20–26 is INCORRECT.
+- Keep a single multi-day retreat or one event's internal agenda together.
+- Merge duplicate descriptions across text and images, but never merge different occurrences.
+- Give each offering its own details. Copy shared details only when they clearly apply.
+
+Each offering must contain:
+
+- category: one of ${VALID_CATEGORIES.map(c => `"${c}"`).join(', ')}. CLASS for recurring structured sessions; RETREAT for multi-day immersive experiences; WORKSHOP for one-off educational events; GATHERING for social events; SERVICE for ongoing services; SALE for items for sale; RENTAL for rentals; OTHER if unclear.
+- title: concise, max 100 characters.
+- description: summarize this offering only; remove WhatsApp artifacts.
+- dateStart, dateEnd: YYYY-MM-DD or null. Infer relative dates and omitted years from the message timestamp. dateEnd is the individual occurrence's end date, normally dateStart for a single-day event.
+- startTime, endTime: HH:MM, 24-hour format, or null. Derive end time/date from explicit duration when possible.
+- startTimePrecision: "unknown", "wholeDay", or "fixedTime". Use "wholeDay" only when explicitly stated or clearly implied; missing time alone means "unknown".
+- pricingType: "free", "fixed", "donation", "range", or null. Treat a mandatory donation amount as fixed.
+- price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
+- location: object containing locationName, addressFragment, city, adminArea, country, url, rawLocationText. Fill only explicitly mentioned location details for this offering; never infer geography from group context or general knowledge. addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording. Use null for missing fields.
+- links: array of {"url":"...","type":"maps|booking|social|website|other"} relevant to this offering.
+- contactInfo: array of {"type":"phone|email|whatsapp|telegram|other","value":"..."} relevant to this offering.
+
+Use null for missing values and [] for missing links or contactInfo. Do not invent details. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
+
+parsingStatus:
+- PARSED_OK: all offerings and occurrences extracted with their key details.
+- PARSED_PARTIAL: offerings extracted, but key details are missing or ambiguous, or extraction is incomplete.
+- PARSED_NOOP: no relevant offerings; return offerings: [].
+
+Use parsingNotes for concise explanations of missing details, ambiguity, or incomplete extraction; otherwise null.
+
+Before returning, silently count the expected occurrences of every recurring schedule and verify that each has its own offering.
+Return no Markdown or text outside the JSON object.`;
+
 
 /**
  * Validate and normalize category
@@ -152,112 +144,31 @@ async function parse({ rawText, media, timestamp, group }) {
         // Call AI provider (can be swapped for other providers)
         const { system_prompt, user_prompt } = prepare_prompts(messageInfo, groupInfo);
         const models = media?.length > 0 ? VISION_MODELS : TEXT_MODELS;
-        const parsedContent = await callLLM(system_prompt, user_prompt, { models: models, images: media, asJson: true });
+        const llmOutput = await callLLM(system_prompt, user_prompt, { models: models, images: media, asJson: true });
 
-        // const parsedContent = {
-        //   "category": "GATHERING",
-        //   "title": "Acro Jam Session & Aerials",
-        //   "description": "Mini Acro Jam with possible aerial activities. At the usual spot ! we're waiting you",
-        //   "date": "2026-02-20",
-        //   "startTime": "09:00",
-        //   "endTime": null,
-        //   "pricingType": null,
-        //   "price": null,
-        //   "location": "coconut beach",
-        //   "parsingStatus": "PARSED_PARTIAL",
-        //   "parsingNotes": "Date inferred from 'tomorrow' relative to message timestamp (2026-02-19). No pricing or end time mentioned."
-        // };
-
-        // const parsedContent = {
-        //   "category": "CLASS",
-        //   "title": "Kundalini Activation Shaktipat Session",
-        //   "description": "A Kundalini Activation Shaktipat session guided by David Tur at Zenky House in Ahangama on March 10, 2026 from 17:00 to 19:00. Participants lie down and receive energy transmission to release blockages. No prior experience required; arrive 15 minutes early. Energy exchange fee 5,000 LKR.",
-        //   "date": "2026-03-10",
-        //   "startTime": "17:00",
-        //   "endTime": "19:00",
-        //   "pricingType": "fixed",
-        //   "price": {
-        //     "amount": 5000,
-        //     "currency": "LKR"
-        //   },
-        //   "location": {
-        //     "locationName": "Zenky House",
-        //     "addressFragment": "",
-        //     "city": "",
-        //     "adminArea": "",
-        //     "country": "",
-        //     "url": "https://maps.app.goo.gl/pw8ysuQnobCcgMsMA",
-        //     "isVenueLikelihood": 0.9,
-        //     "rawLocationText": "Zenky House – Ahangama"
-        //   },
-        //   "links": [
-        //     {
-        //       "url": "https://www.instagram.com/kundaliniserpent/",
-        //       "type": "social"
-        //     }
-        //   ],
-        //   "parsingStatus": "PARSED_OK",
-        //   "parsingModel": "gemini_3_5_flash_lite",
-        //   "parsingNotes": ""
-        // };
-
-        //   const parsedContent = {
-        //     "category": "CLASS",
-        //     "title": "Weekly Yoga Schedule at The Yoga Shack 07/09-13/09",
-        //     "description": "Weekly schedule at The Yoga Shack 07/09-13/09: Daily Vinyasa Flow at 9:30 and Slow Flow at 5:30. Specials: Conscious Connected Breathwork Wednesday 11am, Psychedelic Breathwork Saturday 11am, Massage Workshop Saturday 4pm, Poetic Yin Yoga Sunday 11am. Community Sound Healing & Potluck Monday 7pm (dinner 8pm) free, bring something to share. Kirtan Singing Circle Thursday 7:30pm. Prices: Yoga 3000 LKR, Breathwork 4000 LKR, Kirtan donation-based, Community workshop free. All levels welcome.",
-        //     "dateStart": "2026-09-07",
-        //     "dateEnd": "2026-09-13",
-        //     "startTime": "09:30",
-        //     "endTime": null,
-        //     "pricingType": "fixed",
-        //     "price": {
-        //         "options": [
-        //             {
-        //                 "description": "Yoga",
-        //                 "amount": 3000,
-        //                 "currency": "LKR"
-        //             },
-        //             {
-        //                 "description": "Breathwork",
-        //                 "amount": 4000,
-        //                 "currency": "LKR"
-        //             }
-        //         ]
-        //     },
-        //     "location": {
-        //         "locationName": "The Yoga Shack",
-        //         "addressFragment": "",
-        //         "url": "",
-        //         "isVenueLikelihood": 0.9,
-        //         "rawLocationText": "This week’s schedule at the Yoga Shack"
-        //     },
-        //     "links": [],
-        //     "parsingStatus": "PARSED_OK",
-        //     "parsingNotes": "Weekly schedule with multiple events and mixed pricing: Yoga fixed 3000 LKR, Breathwork fixed 4000 LKR, Kirtan donation-based, Community Potluck free. StartTime reflects daily morning class; multiple other times in description."
-        // }
-
-        const parsed = {
-            category: normalizeCategory(parsedContent.category),
-            title: parsedContent.title || null,
-            description: parsedContent.description || null,
-            dateStart: parsedContent.dateStart || null,
-            dateEnd: parsedContent.dateEnd || null,
-            startTime: parsedContent.startTime || null,
-            endTime: parsedContent.endTime || null,
-            startTimePrecision: parsedContent.startTimePrecision || null,
-            pricingType: parsedContent.pricingType || null,
-            price: parsedContent.price || null,
-            location: parsedContent.location || null,
-            links: parsedContent.links || null,
+        const parsedOfferings = llmOutput.offerings.map(event => ({
+            category: normalizeCategory(event.category),
+            title: event.title || null,
+            description: event.description || null,
+            dateStart: event.dateStart || null,
+            dateEnd: event.dateEnd || null,
+            startTime: event.startTime || null,
+            endTime: event.endTime || null,
+            startTimePrecision: event.startTimePrecision || null,
+            pricingType: event.pricingType || null,
+            price: event.price || null,
+            location: event.location || null,
+            links: event.links || null,
+            contactInfo: event.contactInfo || null,
             latitude: null,
             longitude: null
-        };
+        }));
 
         return {
-            parsed,
-            parsingModel: parsedContent.parsingModel,
-            parsingStatus: parsedContent.parsingStatus,
-            parsingNotes: parsedContent.parsingNotes || null
+            parsedOfferings: parsedOfferings,
+            parsingModel: llmOutput.parsingModel,
+            parsingStatus: llmOutput.parsingStatus,
+            parsingNotes: llmOutput.parsingNotes || null
         };
 
     } catch (error) {
@@ -265,7 +176,7 @@ async function parse({ rawText, media, timestamp, group }) {
 
         // Fallback to raw message on error
         return {
-            parsed: createDefaultParsed(),
+            parsedOfferings: [],
             parsingModel: null,
             parsingStatus: "FAILED",
             parsingNotes: error.message

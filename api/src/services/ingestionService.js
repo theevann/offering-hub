@@ -102,7 +102,7 @@ async function ingestRawMessage(data) {
     if (!rawText && !mediaUrl) throw new Error("rawText or mediaUrl is required");
     const contentHash = await computeHash(rawText, mediaUrl);
 
-    // TODO: Comment next line out once we have group management in place, for now we want to ingest all messages to build up our group database
+    // Comment next line out once we have group management in place, for now we want to ingest all messages to build up our group database
     const group = await getOrCreateGroup(whatsappGroupId, groupName);
 
     // let group = await prisma.group.findUnique({
@@ -140,10 +140,15 @@ async function ingestRawMessage(data) {
 
 
     // ### PARSING ###
-    let { parsed, parsingStatus, parsingNotes, parsingModel } = await parsingService.parse(rawMessage);
+    let { parsedOfferings, parsingStatus, parsingNotes, parsingModel } = await parsingService.parse(rawMessage);
 
     // If parsing failed, update rawMessage and return early
     if (!['PARSED_OK', 'PARSED_PARTIAL'].includes(parsingStatus)) {
+        if (parsingStatus === 'PARSED_NOOP') {
+            log.info(`No-op parsing for message ${rawMessage.id} with status: ${parsingStatus}`, parsingNotes ? `\n> Notes: ${parsingNotes}` : '');
+        } else {
+            log.warn(`Parsing failed for message ${rawMessage.id} with status: ${parsingStatus}`, parsingNotes ? `\n> Notes: ${parsingNotes}` : '');
+        }
 
         await prisma.rawMessage.update({
             where: { id: rawMessage.id },
@@ -154,47 +159,35 @@ async function ingestRawMessage(data) {
             }
         });
 
-        log.info(`Parsing failed for message ${rawMessage.id} with status: ${parsingStatus}`, parsingNotes ? `\n> Notes: ${parsingNotes}` : '');
-
         return {
             rawMessage,
             offering: null
         };
     }
 
-
-    // ### LOCATION RESOLUTION ###
-    const locationInfo = await resolveLocation(parsed.location, group);
-    log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
+    log.info(`Parsed message ${rawMessage.id} with status: ${parsingStatus}`);
 
 
     // ### OFFERING CREATION ###
-    const offeringData = buildOfferingData(parsed, rawMessage, locationInfo);
+    // Parallel creation
+    // const offerings = (
+    //     await Promise.all(parsedOfferings.map(parsed => createOffering(parsed, rawMessage, group)))
+    // ).filter(offering => offering !== null);
+    
+    // offerings.forEach(offering => log.info(`Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`));
 
-    if (DEDUPLICATE ? await isDuplicate(offeringData, group) : false) {
-        log.info(`Duplicate offering detected for message ${rawMessage.id} - skipping creation`);
+    // Sequential creation
+    const offerings = [];
+    for (const parsed of parsedOfferings) {
+        const offering = await createOffering(parsed, rawMessage, group);
+        if (offering !== null) {
+            offerings.push(offering);
+            log.debug(`Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`)
+        }    
+    }    
 
-        await prisma.rawMessage.update({
-            where: { id: rawMessage.id },
-            data: {
-                parsingModel,
-                parsingStatus: 'DUPLICATE',
-                parsingNotes: 'Parsed offering matches an existing offering. Marked as duplicate.'
-            }
-        })
-
-        return {
-            rawMessage,
-            offering: null
-        };
-    }
-
-    offering = await prisma.offering.create({
-        data: offeringData
-    });
-
-    log.info(`Parsed message ${rawMessage.id} with status: ${parsingStatus}`, offering ? `\n> Created offering: ${offering.id} - ${offering.title}` : '');
-
+    const diffCount = parsedOfferings.length - offerings.length;
+    log.info(`Parsed: ${parsedOfferings.length}, Created: ${offerings.length}, Duplicates: ${diffCount}`);
 
     // ### RAW MESSAGE UPDATE ###
     await prisma.rawMessage.update({
@@ -209,7 +202,7 @@ async function ingestRawMessage(data) {
     // Return raw message with group info
     return {
         rawMessage,
-        offering
+        offerings
     };
 }
 
@@ -246,6 +239,36 @@ async function createRawMessage(source, messageId, senderId, senderName, senderP
                 }
             }
         }
+    });
+}
+
+async function createOffering(parsed, rawMessage, group) {
+    // ### LOCATION RESOLUTION ###
+    const locationInfo = await resolveLocation(parsed.location, group);
+    log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
+
+    // ### OFFERING DATA PREP ###
+    const offeringData = buildOfferingData(parsed, rawMessage, locationInfo);
+
+    // ### DEDUPLICATION CHECK ###
+    if (DEDUPLICATE ? await isDuplicate(offeringData, group) : false) {
+        log.debug(`Duplicate offering detected for message ${rawMessage.id} - skipping creation`);
+        return null;
+    }
+
+    // ### OFFERING CREATION ###
+    return await prisma.offering.create({
+        data: offeringData,
+        select: {
+            id: true,
+            title: true,
+            startTime: true,
+            venue: {
+                select: {
+                    displayName: true,
+                },
+            },
+        },
     });
 }
 
@@ -288,6 +311,7 @@ function buildOfferingData(parsed, rawMessage, location, now = new Date()) {
         pricingType: parsed.pricingType,
         price: parsed.price,
         links: parsed.links,
+        contactInfo: parsed.contactInfo,
 
         locationSource: location.source,
         locationText: parsed.location?.rawLocationText ?? null,

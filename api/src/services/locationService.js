@@ -98,9 +98,9 @@ async function searchAliases(parsedLocation, group) {
 
         if (exactMatchesFromParsed.length > 0) {
             if (exactMatchesFromParsed.length > 1) {
-                log.info(`Multiple exact alias matches found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed.map(a => a.alias));
+                log.warn(`Multiple exact alias matches found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed.map(a => a.alias));
             } else {
-                log.info(`Exact alias match found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed[0].alias);
+                log.debug(`Exact alias match found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed[0].alias);
                 return exactMatchesFromParsed[0];
             }
         }
@@ -360,7 +360,7 @@ async function resolveLocation(parsedLocation, group) {
     const aliasMatch = await searchAliases(parsedLocation, group);
 
     if (aliasMatch) {
-        // ### For now, we will not do fuzzy matching and send to gmaps if the alis is not an exact match. ###
+        // ### For now, we will not do fuzzy matching and send to gmaps if the alias is not an exact match. ###
         // Add new alias if the parsed location name is different from the existing normalized alias
         // if (aliasMatch.normalizedAlias !== normalizedLocationName && aliasMatch.similarityScore > 0.8) {
         //     await addVenueAlias(aliasMatch.venueId, parsedLocation.locationName, "FUZZY_MATCH", aliasMatch.similarityScore);
