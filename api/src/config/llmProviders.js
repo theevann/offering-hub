@@ -4,7 +4,7 @@ const PROVIDERS = {
         model: 'deepseek-chat',
         envKey: 'DEEPSEEK_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true
     },
@@ -13,7 +13,7 @@ const PROVIDERS = {
         model: 'MiniMax-M2.7',
         envKey: 'MINIMAX_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true
     },
@@ -22,7 +22,7 @@ const PROVIDERS = {
         model: 'gpt-oss-120b',
         envKey: 'CEREBRAS_API_KEY',
         maxTokensField: 'max_completion_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: false
     },
@@ -31,7 +31,7 @@ const PROVIDERS = {
         model: 'qwen-3-235b-a22b-instruct-2507',
         envKey: 'CEREBRAS_API_KEY',
         maxTokensField: 'max_completion_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: false
     },
@@ -40,7 +40,7 @@ const PROVIDERS = {
         model: 'llama3.1-8b',
         envKey: 'CEREBRAS_API_KEY',
         maxTokensField: 'max_completion_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: false
     },
@@ -49,7 +49,7 @@ const PROVIDERS = {
         model: 'qwen/qwen3-vl-30b-a3b-thinking',
         envKey: 'OPENROUTER_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         reasoning: { effort: 'medium' }
@@ -59,7 +59,7 @@ const PROVIDERS = {
         model: 'google/gemma-4-31b-it:free',
         envKey: 'OPENROUTER_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         reasoning: { effort: 'low' }
@@ -69,7 +69,7 @@ const PROVIDERS = {
         model: 'google/gemma-4-26b-a4b-it:free',
         envKey: 'OPENROUTER_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         reasoning: { effort: 'low' }
@@ -79,7 +79,7 @@ const PROVIDERS = {
         model: 'google/gemini-3.5-flash-lite',
         envKey: 'OPENROUTER_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         reasoning: { effort: 'low' }
@@ -89,7 +89,37 @@ const PROVIDERS = {
         model: 'google/gemini-3.1-flash-lite',
         envKey: 'OPENROUTER_API_KEY',
         maxTokensField: 'max_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
+        temperature: 1,
+        vision: true,
+        reasoning: { effort: 'low' }
+    },
+    gemini_3_8_flash: {
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'google/gemini-3.8-flash',
+        envKey: 'OPENROUTER_API_KEY',
+        maxTokensField: 'max_tokens',
+        maxTokens: 10000,
+        temperature: 1,
+        vision: true,
+        reasoning: { effort: 'low' }
+    },
+    gemini_3_7_flash: {
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'google/gemini-3.7-flash',
+        envKey: 'OPENROUTER_API_KEY',
+        maxTokensField: 'max_tokens',
+        maxTokens: 10000,
+        temperature: 1,
+        vision: true,
+        reasoning: { effort: 'low' }
+    },
+    gemini_3_6_flash: {
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'google/gemini-3.6-flash',
+        envKey: 'OPENROUTER_API_KEY',
+        maxTokensField: 'max_tokens',
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         reasoning: { effort: 'low' }
@@ -99,10 +129,11 @@ const PROVIDERS = {
         model: 'muse-spark-1.3-contributor',
         envKey: 'META_API_KEY',
         maxTokensField: 'max_completion_tokens',
-        maxTokens: 5000,
+        maxTokens: 10000,
         temperature: 1,
         vision: true,
         // reasoning: { effort: 'low' } // should be reasoning_effort for muse but not supporting it for now
+        reasoning_effort: 'minimal'
     }
 };
 

@@ -182,7 +182,7 @@ async function ingestRawMessage(data) {
         const offering = await createOffering(parsed, rawMessage, group);
         if (offering !== null) {
             offerings.push(offering);
-            log.debug(`Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`)
+            log.info(`> Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`)
         }    
     }    
 

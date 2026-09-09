@@ -122,7 +122,7 @@ async function isDuplicate(offeringData, group) {
     });
     if (compatibleOfferings.length === 0) return false;
 
-    log.debug(compatibleOfferings.map(o => prepareCandidateData(o)));
+    log.debug("Compatible offerings:", compatibleOfferings.map(o => prepareCandidateData(o)));
 
     // Filter with date if startTime and endTime are provided
     // compatibleOfferings = compatibleOfferings.filter(o => {
@@ -141,7 +141,7 @@ async function isDuplicate(offeringData, group) {
     );
 
     if (exactMatch) {
-        log.info(`Exact match found with existing offering ${exactMatch.id} (${exactMatch.title})`);
+        log.info(`Exact match found with existing offering ${exactMatch.id}: ${exactMatch.title}`);
         return true;
     }
 
@@ -207,7 +207,7 @@ Based on the details, is the new offering a duplicate of any of the existing can
 
     const response = await callLLM(systemPrompt, userPrompt, { models: DEDUP_MODELS, asJson: true });
 
-    log.info(`LLM deduplication response: ${JSON.stringify(response, null, 2)}`);
+    log.debug(`LLM deduplication response: ${JSON.stringify(response, null, 2)}`);
 
     // LLM response validation
 
@@ -224,6 +224,8 @@ Based on the details, is the new offering a duplicate of any of the existing can
     if (!response.isDuplicate && response.matchingOfferingId !== null) {
         throw new Error("Non-duplicate response must have a null matching ID");
     }
+
+    log.info(`LLM Deduplication result: ${response.isDuplicate ? 'Duplicate' : 'Not a duplicate'}`);
 
     // TODO: Change return type to include the matchingOfferingId and reason for better logging and debugging
     return response.isDuplicate;

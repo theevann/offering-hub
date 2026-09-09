@@ -164,9 +164,12 @@ async function callModel(provider, messages, { asJson = true }) {
     };
 
     const maxTokensField = providerConfig.maxTokensField || 'max_tokens';
-    requestBody[maxTokensField] = providerConfig.maxTokens ?? 5000;
+    requestBody[maxTokensField] = providerConfig.maxTokens ?? 10000;
+    
     if (providerConfig.reasoning) {
         requestBody.reasoning = providerConfig.reasoning;
+    } else if (providerConfig.reasoning_effort) {
+        requestBody.reasoning_effort = providerConfig.reasoning_effort;
     }
 
     log.info(`Calling ${provider} with model: ${providerConfig.model}`);
