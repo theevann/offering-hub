@@ -167,7 +167,7 @@ async function ingestRawMessage(data) {
     const locationInfo = await resolveLocation(parsed.location, group);
     log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
 
-q
+
     // ### OFFERING CREATION ###
     const offeringData = buildOfferingData(parsed, rawMessage, locationInfo);
 

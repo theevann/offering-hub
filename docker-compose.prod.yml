@@ -1,9 +1,10 @@
+name: coie-prod
+
 services:
   api-migrate:
     build:
       context: ./api
       target: prod-migrate
-    container_name: offerings_api_migrate
     command: ["npm", "exec", "prisma", "migrate", "deploy"]
     environment:
       NODE_ENV: production
@@ -14,6 +15,8 @@ services:
     restart: "no"
 
   api:
+    volumes:
+      - ./data-prod:/data:ro
     build:
       target: prod-runtime
     restart: unless-stopped
@@ -32,6 +35,8 @@ services:
         condition: service_completed_successfully
 
   bot:
+    volumes:
+      - ./data-prod:/data
     build:
       target: prod-runtime
     # restart: unless-stopped
@@ -43,7 +48,6 @@ services:
   # web:
   #   build:
   #     target: prod-runtime
-  #   container_name: offerings_web
   #   restart: unless-stopped
   #   environment:
   #     NODE_ENV: production

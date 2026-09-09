@@ -1,7 +1,7 @@
 services:
   db:
     image: postgis/postgis:16-3.4-alpine
-    container_name: offerings_db
+    platform: linux/amd64
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?required}
@@ -22,9 +22,6 @@ services:
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
       STORAGE_PATH: /data
-    volumes:
-      - ./data:/data:ro
-    container_name: offerings_api
 
   bot:
     build:
@@ -32,7 +29,6 @@ services:
     environment:
       API_BASE_URL: http://api:3000
       STORAGE_PATH: /data
-    container_name: offerings_bot
     shm_size: "1gb"
     init: true
     stop_grace_period: 30s
@@ -41,12 +37,10 @@ services:
     volumes:
       - bot_session:/app/session
       - bot_logs:/app/logs
-      - ./data:/data
 
   # web:
   #   build:
   #     context: ./web
-  #   container_name: offerings_frontend
   #   restart: always
   #   ports:
   #     - "3001:3001"

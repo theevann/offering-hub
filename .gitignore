@@ -45,6 +45,7 @@ temp/
 bot/.wwebjs_cache/
 bot/session
 data/
+data-prod/
 
 # Local databases
 *.sqlite

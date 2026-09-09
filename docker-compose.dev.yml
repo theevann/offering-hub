@@ -1,6 +1,8 @@
+# Keep the existing development volumes (coie_postgres_data, etc.).
+name: coie
+
 services:
   db:
-    platform: linux/amd64
     ports:
       - "5432:5432"
 
@@ -10,6 +12,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
+      - ./data:/data:ro
       - ./api:/app
       - /app/node_modules
     environment:
@@ -24,6 +27,7 @@ services:
     build:
       target: dev
     volumes:
+      - ./data:/data
       - ./bot/src:/app/src
     environment:
       NODE_ENV: development
