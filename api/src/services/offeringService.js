@@ -1,5 +1,6 @@
 const prisma = require("../db/prismaClient");
 
+
 async function getAllOfferings() {
   const now = new Date();
 
@@ -39,7 +40,7 @@ async function getAllOfferings() {
           group: {
             select: {
               id: true,
-              whatsappId: true,
+              sourceId: true,
               name: true,
               country: true,
               city: true,
@@ -106,7 +107,6 @@ async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50 }) {
   `;
 }
 
-
 async function getAllRawMessages_deprecated() {
   return await prisma.offering.findMany({
     orderBy: { createdAt: "desc" },
@@ -124,7 +124,7 @@ async function getAllRawMessages_deprecated() {
           group: {
             select: {
               id: true,
-              whatsappId: true,
+              sourceId: true,
               name: true,
               country: true,
               city: true,

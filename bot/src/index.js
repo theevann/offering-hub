@@ -1,7 +1,5 @@
+require('dotenv').config()
 console.log("Starting WhatsApp Bot in environment:", process.env.NODE_ENV);
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config()
-}
 
 const qrcode = require("qrcode-terminal");
 const axios = require("axios");
@@ -9,18 +7,22 @@ const fs = require("fs").promises;
 const fsSync = require("fs");
 const path = require("path");
 const { Client, LocalAuth } = require("whatsapp-web.js");
-const { computeHash, checkDuplicate, addToSeenHashes, loadSeenHashes } = require('./deduplication');
+const { computeHash, isDuplicate, loadSeenHashes } = require('./deduplication');
 
 // DEV SETTINGS
-const BYPASS_GROUP_CHECK = true;
+const BYPASS_GROUP_CHECK = process.env.BYPASS_GROUP_CHECK === "true";
+const BYPASS_DUPLICATE_CHECK = process.env.BYPASS_DUPLICATE_CHECK === "true";
 
-const LOG_ROOT = path.resolve(__dirname, "..", "logs");
-const apiUrl = `${process.env.API_BASE_URL}`;
-console.log('Using API_BASE_URL:', apiUrl);
+const BOT_ROOT = path.resolve(__dirname, "..");
+const APP_ROOT = path.resolve(BOT_ROOT, "..");
+const LOG_ROOT = path.resolve(BOT_ROOT, "logs");
+const STORAGE_ROOT = path.resolve(APP_ROOT, process.env.STORAGE_PATH);
+const API_URL = process.env.API_BASE_URL;
+console.log('Using API_BASE_URL:', API_URL);
 
 // Active groups cache - refreshed periodically from API
 let activeGroupIds = new Set();
-const REFRESH_INTERVAL = 10 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 60 * 10_000; // 10 minutes
 
 // Reconnection strategy for unexpected disconnects/auth failures
 const MAX_RECONNECT_ATTEMPTS = Number(process.env.WWJS_MAX_RECONNECT_ATTEMPTS) || 10;
@@ -30,24 +32,33 @@ const RECONNECT_MAX_DELAY_MS = Number(process.env.WWJS_RECONNECT_MAX_DELAY_MS) |
 let reconnectAttempts = 0;
 let reconnectTimer = null;
 let initializing = false;
+let shuttingDown = false;
+let messageKeyPatch = Promise.resolve();
 
-// Clean stale Chromium singleton locks if present. Do not crash on permission issues.
-cleanupSingletonLocks("./session/session");
+// Recovery only: use after stopping all Chromium processes using this profile.
+// Unconditional deletion can let two browsers write to the same profile.
+if (process.env.WWJS_CLEAN_SINGLETON_LOCKS === "true") {
+    cleanupSingletonLocks(path.join(BOT_ROOT, "session", "session"));
+}
+
+// ### WhatsApp client setup ###
+
 const client = new Client({
     authStrategy: new LocalAuth({
-        dataPath: "./session"
+        dataPath: path.join(BOT_ROOT, "session")
     }),
     puppeteer: {
-        headless: true,
-        // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        handleSIGINT: false, // Let our own shutdown handler manage cleanup
+        handleSIGTERM: false,
+        handleSIGHUP: false,
+        headless: process.env.WWJS_HEADLESS !== "false",
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-zygote",
-        "--single-process"
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run"
         ]
     }
 });
@@ -58,10 +69,14 @@ client.on("qr", qr => {
 });
 
 client.on("ready", async () => {
-    console.log("WhatsApp Bot is ready!");
+    messageKeyPatch = applyMessageKeyCompatibilityPatch();
+    await messageKeyPatch;
     await loadSeenHashes();
     await fetchActiveGroups();
     setInterval(fetchActiveGroups, REFRESH_INTERVAL);
+
+    console.log("WhatsApp Bot is ready!");
+
     // Reset backoff on successful connection
     reconnectAttempts = 0;
     initializing = false;
@@ -69,38 +84,134 @@ client.on("ready", async () => {
 });
 
 client.on("message", async msg => {
-    if (msg.body === "") {
-        console.log("Received non-text message, ignoring.");
-        return; // For now ignore non-text messages
+    await messageKeyPatch;
+    if (!msg.id._serialized && typeof msg.id.$1 === "string") {
+        msg.id._serialized = msg.id.$1;
     }
-    const chat = await msg.getChat();
-    const contact = await msg.getContact();
-    
+    handleMessage(msg).catch(err => {
+        console.error(`[${msg.id?.id || "unknown"}] Message processing failed:`, err);
+    });
+});
+
+client.on("disconnected", (reason) => {
+    console.error("WhatsApp client disconnected:", reason);
+    initializing = false;
+    scheduleReconnect(reason || "disconnected");
+});
+
+client.on("authenticated", () => console.log("WhatsApp authenticated; waiting for ready."));
+client.on("auth_failure", message => console.error("WhatsApp authentication failed:", message));
+client.on("loading_screen", percent => console.log(`WhatsApp loading: ${percent}%`));
+client.on("change_state", state => console.log("Client state:", state));
+
+
+// ### Helper functions ###
+
+
+async function startClient() {
+    initializing = true;
+    try {
+        await client.initialize();
+    } catch (err) {
+        console.error("WhatsApp initialization failed:", err.message || err);
+        console.error(">>> Run with WWJS_CLEAN_SINGLETON_LOCKS=true if error is locked profile.");
+        console.error(">>> Run with WWJS_HEADLESS=false to inspect the WhatsApp loading screen.");
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        try {
+            if (client.pupBrowser) await client.destroy();
+        } catch (cleanupError) {
+            console.error("Browser cleanup failed:", cleanupError.message);
+        }
+        process.exit(1);
+    } finally {
+        initializing = false;
+    }
+}
+
+async function shutdownClient(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    console.log(`${signal}: closing WhatsApp browser`);
+    clearTimeout(reconnectTimer);
+
+    try {
+        await client.destroy();
+        console.log("WhatsApp browser closed");
+        process.exit(0);
+    } catch (error) {
+        console.error("Browser shutdown failed:", error);
+        process.exit(1);
+    }
+}
+
+function cleanupSingletonLocks(sessionDir) {
+    // Only remove Chromium's known lock artifacts, never profile data.
+    for (const name of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
+        const filePath = path.join(sessionDir, name);
+        try {
+            fsSync.unlinkSync(filePath);
+            console.log(`Removed Chromium lock artifact: ${name}`);
+        } catch (err) {
+            if (err.code !== "ENOENT") {
+                console.warn(`Could not remove ${filePath}: ${err.message}`);
+            }
+        }
+    }
+}
+
+function applyMessageKeyCompatibilityPatch() {
+    // Temporary compatibility shim: this code must run inside WhatsApp's page.
+    return client.pupPage.evaluate(() => {
+        const MsgKey = window.Store?.MsgKey || window.require('WAWebMsgKey');
+        const p = MsgKey?.prototype;
+        if (!p) throw new Error("WhatsApp MsgKey prototype is unavailable");
+        if ('_serialized' in p) return "already present";
+        Object.defineProperty(p, '_serialized', {
+            get() { return this.$1; },
+            configurable: true
+        });
+        return "applied";
+    }).then(status => {
+        console.log(`WhatsApp MsgKey compatibility patch: ${status}`);
+    }).catch(err => {
+        console.warn("WhatsApp MsgKey compatibility patch failed:", err.message || err);
+    });
+}
+
+async function handleMessage(msg) {
+    if (msg.body === "" && !(msg.hasMedia && msg.type === 'image')) {
+        return;
+    }
+
+    const chat = await msg.getChat()
+    const contact = await msg.getContact()
     const isFromGroup = msg.from.endsWith("@g.us");
     const messageId = msg.id.id;
     const senderId = isFromGroup ? msg.author : msg.from;
-    const senderName = contact.pushname || contact.name || "Unknown";
-    const senderPhone = contact.number || "Unknown";
+    const senderName = contact?.pushname || contact?.name || "Unknown";
+    const senderPhone = contact?.number || "Unknown";
     const groupId = isFromGroup ? msg.from : null;
-    const groupName = isFromGroup ? chat.name : null;
+    const groupName = isFromGroup ? chat?.name || null : null;
+    const media = msg.hasMedia && msg.type === 'image' ? await msg.downloadMedia() : null;
 
-    // Handle media in messages
-    if (msg.hasMedia) {
-        try {
-            const media = await msg.downloadMedia();
-            console.log(`Message ${messageId} contains media of type ${media.mimetype} and size ${media.data.length} bytes.`);
-        } catch (err) {
-            console.error(`Failed to download media for message ${messageId}:`, err.message);
-        }
+    console.log(`\n>>> [${messageId}] Received message from ${senderName} (${senderPhone}): ${msg.body.substring(0, 100)}...`);
+
+    // Skip if group is not active
+    if (groupId && !activeGroupIds.has(groupId)) {
+        console.log(`[${messageId}] Skipping message from inactive group: ${groupName} [${groupId}]`);
+        if (!BYPASS_GROUP_CHECK)
+            return;
     }
     
-    // Skip if group is not active
-    if (!BYPASS_GROUP_CHECK && isFromGroup && groupId && !activeGroupIds.has(groupId)) {
-        console.log(`Skipping message from inactive group: ${groupName}`);
-        return;
-    } 
+    // Check for duplicates (currently not blocking ingestion)
+    if (isDuplicate(msg.body, media, addToSeenHashes=true)) {
+        console.log(`XXX [${messageId}] Message already received - ignoring`);
+        if (!BYPASS_DUPLICATE_CHECK)
+            return;
+    }
 
-    // TODO: Direct message are always ingested, but we might want to filter them in the future based on sender or content
+    // TODO : Direct message are always ingested, but we might want to filter them in the future based on sender or content
     
     const data = {
         source: "whatsapp",
@@ -111,58 +222,20 @@ client.on("message", async msg => {
         senderName,
         senderPhone,
         rawText: msg.body,
-        contentHash: computeHash(msg.body),
+        contentHash: computeHash(msg.body, media?.data || ''),
+        mediaUrl: msg.hasMedia && msg.type === 'image' ? await saveMessageMedia(messageId, media) : null,
         msgTimestamp: msg.timestamp * 1000 // Convert to ms
     }
-    
-    console.log(`\n>>> Received message from ${senderName} (${senderPhone}): ${msg.body.substring(0, 100)}...`);
-    if (checkDuplicate(data)) {
-        console.log("XXX Message already received - ignoring");
-        // return;
-    }
-    addToSeenHashes(data);
+
     log_message(data).catch(err => console.error("Log write failed:", err));
 
     try {
-        await axios.post(`${apiUrl}/ingest/raw`, data);
-        console.log("<<< Message sent to API");
+        console.log(`<<< [${messageId}] Sending message to API`);
+        await axios.post(`${API_URL}/ingest/raw`, data);
     } catch (err) {
-        console.error("Error sending message to API:", err.message);
-    }
-});
-
-client.on("disconnected", (reason) => {
-    console.error("WhatsApp client disconnected:", reason);
-    initializing = false;
-    scheduleReconnect(reason || "disconnected");
-});
-
-client.on("change_state", (state) => {
-    console.log("Client state:", state);
-});
-
-
-client.initialize();
-
-function cleanupSingletonLocks(sessionDir) {
-    try {
-        const entries = fsSync.readdirSync(sessionDir);
-        for (const name of entries) {
-            if (!name.startsWith("Singleton")) continue;
-            const filePath = path.join(sessionDir, name);
-            try {
-                fsSync.rmSync(filePath, { force: true });
-            } catch (err) {
-                console.warn(`Could not remove ${filePath}: ${err.message}`);
-            }
-        }
-    } catch (err) {
-        if (err && err.code !== "ENOENT") {
-            console.warn(`Session lock cleanup skipped: ${err.message}`);
-        }
+        console.error(`[${messageId}] Error sending message to API:`, err.message);
     }
 }
-
 
 async function log_message(data) {
     const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -178,12 +251,22 @@ async function log_message(data) {
     await fs.appendFile(logFile, JSON.stringify(logEntry) + "\n");
 }
 
+async function saveMessageMedia(messageId, media) {
+    const messageDir = path.join(STORAGE_ROOT, "media");
+    const outputPath = path.join(messageDir, `${messageId}.jpg`);
+
+    await fs.mkdir(messageDir, { recursive: true });
+    await fs.writeFile(outputPath, Buffer.from(media.data, "base64"));
+    console.log(`Saved media for message ${messageId} to ${outputPath}`);
+    return path.relative(STORAGE_ROOT, outputPath).replace(/\\/g, "/");
+}
+
 // Fetch active groups from API
 async function fetchActiveGroups() {
     try {
-        const response = await axios.get(`${apiUrl}/groups/active`);
+        const response = await axios.get(`${API_URL}/groups/active`);
         const groups = response.data;
-        activeGroupIds = new Set(groups.map(g => g.whatsappId));
+        activeGroupIds = new Set(groups.map(g => g.sourceId));
         console.log(`Loaded ${activeGroupIds.size} active groups`);
     } catch (err) {
         console.error("Failed to fetch active groups:", err.message);
@@ -217,3 +300,12 @@ function scheduleReconnect(reason = "unknown") {
         }
     }, delay);
 }
+
+
+// Graceful shutdown on signals
+process.on("SIGTERM", () => shutdownClient("SIGTERM")); // Docker stop
+process.on("SIGINT", () => shutdownClient("SIGINT"));   // Ctrl+C
+process.on("SIGHUP", () => shutdownClient("SIGHUP"));   // Terminal closed
+
+// Start the WhatsApp client
+startClient();

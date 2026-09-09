@@ -1,49 +1,13 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("llm");
+
 if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config()
+    require('dotenv').config({ quiet: true })
 }
 
-const PROVIDERS = {
-    deepseek: {
-        url: 'https://api.deepseek.com/v1/chat/completions',
-        model: 'deepseek-chat',
-        envKey: 'DEEPSEEK_API_KEY',
-        maxTokensField: 'max_tokens',
-        maxTokens: 1024,
-        temperature: 0.1
-    },
-    minimax: {
-        url: 'https://api.minimaxi.chat/v1/text/chatcompletion_v2',
-        model: 'MiniMax-M2.5',
-        envKey: 'MINIMAX_API_KEY',
-        maxTokensField: 'max_tokens',
-        maxTokens: 1024,
-        temperature: 0.1
-    },
-    gpt_oss_120b: {
-        url: 'https://api.cerebras.ai/v1/chat/completions',
-        model: 'gpt-oss-120b',
-        envKey: 'CEREBRAS_API_KEY',
-        maxTokensField: 'max_completion_tokens',
-        maxTokens: 1024,
-        temperature: 0.1
-    },
-    qwen_3: {
-        url: 'https://api.cerebras.ai/v1/chat/completions',
-        model: 'qwen-3-235b-a22b-instruct-2507',
-        envKey: 'CEREBRAS_API_KEY',
-        maxTokensField: 'max_completion_tokens',
-        maxTokens: 1024,
-        temperature: 0.1
-    },
-    llama_31_8b: {
-        url: 'https://api.cerebras.ai/v1/chat/completions',
-        model: 'llama3.1-8b',
-        envKey: 'CEREBRAS_API_KEY',
-        maxTokensField: 'max_completion_tokens',
-        maxTokens: 1024,
-        temperature: 0.1
-    }
-};
+const { PROVIDERS } = require('../config/llmProviders');
+const STORAGE_PATH = process.env.STORAGE_PATH;
+log.debug(`STORAGE_PATH: ${STORAGE_PATH}`);
 
 
 function extractJson(content) {
@@ -55,37 +19,157 @@ function extractJson(content) {
     return content;
 }
 
+// TODO: Is this function necessary?q
+function normalizeImages(options = {}) {
+    if (Array.isArray(options.images)) {
+        return options.images
+            .map((image) => {
+                if (typeof image === 'string') {
+                    return { url: image };
+                }
+                if (image?.url) {
+                    return {
+                        url: image.url,
+                        mimeType: image.mimeType || null
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean);
+    }
+
+    if (typeof options.imageUrl === 'string') {
+        return [{ url: options.imageUrl, mimeType: options.imageMimeType || null }];
+    }
+
+    return [];
+}
+
+async function image2base64(image) {
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    // show image info
+    log.debug(`Converting image to base64: ${image.url}, mimeType: ${image.mimeType}`);
+
+    // Read the file
+    const imagePath = path.join(STORAGE_PATH, image.url);
+    const imageBuffer = await fs.readFile(imagePath);
+
+    // Convert to base64
+    const base64 = imageBuffer.toString('base64');
+
+    // Determine MIME type
+    let mimeType = image.mimeType;
+    if (!mimeType) {
+        const ext = path.extname(image.url).toLowerCase();
+        const mimeTypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.avif': 'image/avif',
+            '.bmp': 'image/bmp'
+        };
+        mimeType = mimeTypes[ext] || 'image/jpeg';
+    }
+
+    // Return data URL
+    return `data:${mimeType};base64,${base64}`;
+}
+
+async function buildMessages(systemPrompt, userPrompt, images = []) {
+    if (images.length === 0) {
+        return [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ];
+    }
+
+    const imageContent = await Promise.all(
+        images.map(async (image) => ({
+            type: 'image_url',
+            image_url: {
+                url: await image2base64(image)
+            }
+        }))
+    );
+
+    return [
+        { role: 'system', content: systemPrompt },
+        {
+            role: 'user',
+            content: [
+                { type: 'text', text: userPrompt },
+                ...imageContent
+            ]
+        }
+    ];
+}
+
+async function callLLM(
+    systemPrompt,
+    userPrompt,
+    { models, images = [], asJson = true }
+) {
+    if (!models.length) {
+        throw new Error("No LLM models configured");
+    }
+
+    // Prepare images once. A missing local file shouldn't trigger fallbacks.
+    const messages = await buildMessages(systemPrompt, userPrompt, images);
+
+    const failures = [];
+
+    for (const model of models) {
+        try {
+            return {
+                ...(await callModel(model, messages, { asJson })),
+                parsingModel: model
+            };
+        } catch (error) {
+            log.warn(`Model ${model} failed: ${error.message}`);
+            failures.push(`${model}: ${error.message}`);
+        }
+    }
+
+    throw new Error(`All models failed:\n${failures.join("\n")}`);
+}
+
 
 /**
  * Generic LLM caller that routes to the appropriate provider
- * @param {string} systemPrompt - The system prompt
- * @param {string} userPrompt - The user prompt
- * @param {string} provider - The provider to use ('deepseek', 'minimax', or 'cerebras')
+ * @param {string} provider - The provider to use
+ * @param {Array} messages - The messages - ready to be sent to the model
+ * @param {Object} options - Additional options for the request - used for images
  * @returns {Promise<Object>} - Parsed JSON object
  */
-async function callLLM(systemPrompt, userPrompt, provider = 'deepseek', asJson = true) {
-    const providerConfig = PROVIDERS[provider.toLowerCase()];
-
+// Note: TODO: Use responses api
+async function callModel(provider, messages, { asJson = true }) {
+    const providerConfig = PROVIDERS[provider];
     if (!providerConfig) {
         throw new Error(`Unknown LLM provider: ${provider}`);
     }
 
     const apiKey = process.env[providerConfig.envKey];
-
     if (!apiKey) {
         throw new Error(`${providerConfig.envKey} not set`);
     }
 
     const requestBody = {
         model: providerConfig.model,
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-        ],
-        temperature: providerConfig.temperature ?? 0.1,
+        messages: messages,
+        temperature: providerConfig.temperature ?? 1,
     };
+
     const maxTokensField = providerConfig.maxTokensField || 'max_tokens';
-    requestBody[maxTokensField] = providerConfig.maxTokens ?? 500;
+    requestBody[maxTokensField] = providerConfig.maxTokens ?? 5000;
+    if (providerConfig.reasoning) {
+        requestBody.reasoning = providerConfig.reasoning;
+    }
+
+    log.info(`Calling ${provider} with model: ${providerConfig.model}`);
 
     const response = await fetch(providerConfig.url, {
         method: 'POST',
@@ -98,20 +182,36 @@ async function callLLM(systemPrompt, userPrompt, provider = 'deepseek', asJson =
 
     if (!response.ok) {
         const errorText = await response.text();
+        log.error("Provider error:", response.status, errorText);
         throw new Error(`${provider} API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content;
+    if (data.error) {
+        throw new Error(
+            `${provider}: ${data.error.code ?? response.status} — ` +
+            data.error.message
+        );
+    }
+    log.debug(`Response metadata from ${provider}:`, data);
 
+    const content = data.choices[0]?.message?.content;
     if (!content) {
         throw new Error(`No content in ${provider} response`);
     }
-    console.log(`Raw response from ${provider}:`, content);
+    log.debug(`Response content from ${provider}:`, content);
 
     return asJson ? JSON.parse(extractJson(content)) : content;
 }
 
+function readModelList(name) {
+    return (process.env[name] || "")
+        .split(",")
+        .map(model => model.trim())
+        .filter(Boolean);
+}
+
 module.exports = {
+    readModelList,
     callLLM
 };

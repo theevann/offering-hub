@@ -19,21 +19,33 @@ services:
   api:
     build:
       context: ./api
-      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
+      STORAGE_PATH: /data
+    volumes:
+      - ./data:/data:ro
     container_name: offerings_api
 
   bot:
-    build: ./bot
+    build:
+      context: ./bot
+    environment:
+      API_BASE_URL: http://api:3000
+      STORAGE_PATH: /data
     container_name: offerings_bot
     shm_size: "1gb"
+    init: true
+    stop_grace_period: 30s
     depends_on:
       - api
     volumes:
       - bot_session:/app/session
       - bot_logs:/app/logs
+      - ./data:/data
 
   # web:
-  #   build: ./web
+  #   build:
+  #     context: ./web
   #   container_name: offerings_frontend
   #   restart: always
   #   ports:

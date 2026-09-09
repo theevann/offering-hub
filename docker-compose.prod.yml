@@ -2,14 +2,12 @@ services:
   api-migrate:
     build:
       context: ./api
-      dockerfile: Dockerfile
       target: prod-migrate
     container_name: offerings_api_migrate
     command: ["npm", "exec", "prisma", "migrate", "deploy"]
     environment:
       NODE_ENV: production
-    env_file:
-      - ./api.env
+      DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
     depends_on:
       db:
         condition: service_healthy
@@ -26,7 +24,7 @@ services:
     environment:
       NODE_ENV: production
     env_file:
-      - ./api.env
+      - ./api/.env.prod
     depends_on:
       db:
         condition: service_healthy
@@ -40,19 +38,18 @@ services:
     environment:
       NODE_ENV: production
     env_file:
-      - ./bot.env
+      - ./bot/.env.prod
 
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    container_name: offerings_web
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-    env_file:
-      - ./web.env
-    depends_on:
-      - api
-    ports:
-      - "80:3001"
+  # web:
+  #   build:
+  #     target: prod-runtime
+  #   container_name: offerings_web
+  #   restart: unless-stopped
+  #   environment:
+  #     NODE_ENV: production
+  #   env_file:
+  #     - ./web.env
+  #   depends_on:
+  #     - api
+  #   ports:
+  #     - "80:3001"

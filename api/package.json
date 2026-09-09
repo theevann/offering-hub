@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "dev": "nodemon src/index.js",
-    "dev:docker": "npx prisma generate && npm run dev"
+    "dev:docker": "npx prisma generate && npm run dev",
+    "db:rebuild-migration": "node scripts/rebuild-initial-migration.js"
   },
   "keywords": [],
   "author": "",

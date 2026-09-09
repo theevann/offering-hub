@@ -59,7 +59,7 @@ enum LocationSource {
 
 model Group {
   id         String @id @default(cuid())
-  whatsappId String @unique // WhatsApp's internal group ID
+  sourceId String @unique // WhatsApp's internal group ID
   name       String // Human-readable name
 
   type GroupType
@@ -75,7 +75,7 @@ model Group {
   latitude  Float?
   longitude Float?
   location     Unsupported("geography(Point,4326)")?
-  radiusKm  Float?
+  radiusKm  Float? // Max is 50 km per API spec
 
   // Status
   active Boolean @default(true)
@@ -103,6 +103,9 @@ model Venue {
   normalizedName String
 
   address String?
+  city     String?
+  adminArea String?
+  country  String?
 
   latitude  Float
   longitude Float
@@ -135,7 +138,7 @@ model VenueAlias {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([normalizedAlias])
+  // @@unique([venueId, normalizedAlias]) // Could happen that two different venues have the same alias, eg in different countries
 }
 
 model RawMessage {
@@ -152,9 +155,10 @@ model RawMessage {
 
   // Content
   rawText     String
-  rawTextHash String?
+  contentHash String?
 
   // Processing state
+  parsingModel  String?
   parsingStatus ParseStatus @default(PENDING)
   parsingNotes  String?
 
@@ -170,7 +174,7 @@ model RawMessage {
   @@index([groupId])
   @@index([parsingStatus])
   @@index([createdAt])
-  @@index([rawTextHash, createdAt])
+  @@index([contentHash, createdAt])
 }
 
 model Media {
@@ -197,6 +201,7 @@ model Offering {
   description String?
   startTime   DateTime? // Full timestamp combining date + start time (timezone-aware)
   endTime     DateTime? // Full timestamp combining date + end time (timezone-aware)
+  startTimePrecision String? // one of "unknown", "wholeDay", "fixedTime" (use "unknown" if no time is mentioned, "wholeDay" if the message implies an all-day event, and "fixedTime" if a specific time is mentioned)
   pricingType String? // e.g. "free", "fixed", "donation", "range"
   price       Json? // Flexible pricing info (e.g. { "amount": 10, "currency": "USD" })
 
@@ -220,6 +225,7 @@ model Offering {
 
   media Media[]
   links Json? // Extracted links from the message (e.g. [{ "url": "https://example.com", "type": "registration" }])
+  contactInfo Json? // TODO: Extracted contact info (e.g. [{ "type": "phone", "value": "+1234567890" }])
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

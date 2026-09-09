@@ -1,3 +1,13 @@
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config({
+    path: require("node:path").join(__dirname, "../.env"),
+    quiet: true
+  });
+}
+
+const { createLogger } = require("./utils/logger");
+const log = createLogger("api");
+
 
 const express = require("express");
 
@@ -55,15 +65,15 @@ const server = app.listen(PORT, HOST, () => {
   const address = server.address();
 
   if (!address) {
-    console.error(`Server failed to bind on ${HOST}:${PORT}`);
+    log.error(`Server failed to bind on ${HOST}:${PORT}`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Server running on http://${address.address}:${address.port}`);
+  log.info(`Server running on http://${address.address}:${address.port}`);
 });
 
 server.on("error", (error) => {
-  console.error(`Failed to start server on ${HOST}:${PORT}:`, error.message);
+  log.error(`Failed to start server on ${HOST}:${PORT}:`, error.message);
   process.exit(1);
 });

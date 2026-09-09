@@ -1,3 +1,6 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("routes/offerings");
+
 const express = require("express");
 const router = express.Router();
 const offeringService = require("../services/offeringService");
@@ -32,7 +35,7 @@ router.get("/all", async (req, res) => {
     const result = await offeringService.getAllOfferings();
     res.status(200).json(result);
   } catch (err) {
-    console.error("GET /offerings/all error:", err);
+    log.error("GET /offerings/all error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -44,7 +47,7 @@ router.get("/nearby", async (req, res) => {
     res.status(200).json(result);
   } catch (err) {
     const statusCode = err.message.includes("must be") ? 400 : 500;
-    console.error("GET /offerings/nearby error:", err);
+    log.error("GET /offerings/nearby error:", err);
     res.status(statusCode).json({ error: err.message });
   }
 });
@@ -56,7 +59,7 @@ router.get("/raw/all", async (req, res) => {
     const result = await offeringService.getAllRawMessages_deprecated();
     res.status(200).json(result);
   } catch (err) {
-    console.error("GET /offerings/raw/all error:", err);
+    log.error("GET /offerings/raw/all error:", err);
     res.status(500).json({ error: err.message });
   }
 });

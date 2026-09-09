@@ -1,3 +1,6 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("testParsing");
+
 /**
  * Standalone test script for the parsing service
  * 
@@ -8,7 +11,7 @@
  */
 
 if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config({ path: __dirname + '/../../.env' });
+  require('dotenv').config({ path: __dirname + '/../../.env', quiet: true });
 }
 const { parse } = require('./parsingService');
 
@@ -57,41 +60,41 @@ const testCases = [
 ];
 
 async function runTests() {
-  console.log('🧪 Testing Parsing Service\n');
-  console.log('========================================\n');
+  log.info('🧪 Testing Parsing Service\n');
+  log.info('========================================\n');
 
   for (const testCase of testCases) {
-    console.log(`📋 Test: ${testCase.name}`);
-    console.log(`   Message: "${testCase.rawMessage.rawText}"`);
-    console.log(`   Group: ${testCase.rawMessage.group.name}, ${testCase.rawMessage.group.city}, ${testCase.rawMessage.group.country}`);
-    console.log('');
+    log.info(`📋 Test: ${testCase.name}`);
+    log.info(`   Message: "${testCase.rawMessage.rawText}"`);
+    log.info(`   Group: ${testCase.rawMessage.group.name}, ${testCase.rawMessage.group.city}, ${testCase.rawMessage.group.country}`);
+    log.info('');
 
     try {
       const result = await parse(testCase.rawMessage);
       
-      console.log('   Result:');
-      console.log(`   Category: ${result.parsed.category}`);
-      console.log(`   Title: ${result.parsed.title}`);
-      console.log(`   Description: ${result.parsed.description?.substring(0, 100)}...`);
-      console.log(`   Date (raw): ${result.parsed.date}`);
-      console.log(`   Start Time (raw): ${result.parsed.startTime}`);
-      console.log(`   End Time (raw): ${result.parsed.endTime}`);
-      console.log(`   Pricing Type: ${result.parsed.pricingType}`);
-      console.log(`   Price: ${JSON.stringify(result.parsed.price)}`);
-      console.log(`   Location: ${result.parsed.location}`);
-      console.log(`   Status: ${result.status}`);
-      console.log(`   Notes: ${result.parsingNotes || 'None'}`);
+      log.info('   Result:');
+      log.info(`   Category: ${result.parsed.category}`);
+      log.info(`   Title: ${result.parsed.title}`);
+      log.info(`   Description: ${result.parsed.description?.substring(0, 100)}...`);
+      log.info(`   Date (raw): ${result.parsed.date}`);
+      log.info(`   Start Time (raw): ${result.parsed.startTime}`);
+      log.info(`   End Time (raw): ${result.parsed.endTime}`);
+      log.info(`   Pricing Type: ${result.parsed.pricingType}`);
+      log.info(`   Price: ${JSON.stringify(result.parsed.price)}`);
+      log.info(`   Location: ${result.parsed.location}`);
+      log.info(`   Status: ${result.status}`);
+      log.info(`   Notes: ${result.parsingNotes || 'None'}`);
       
       if (result.error) {
-        console.log(`   Error: ${result.error}`);
+        log.info(`   Error: ${result.error}`);
       }
     } catch (error) {
-      console.log(`   ❌ Error: ${error.message}`);
+      log.info(`   ❌ Error: ${error.message}`);
     }
 
-    console.log('\n----------------------------------------\n');
+    log.info('\n----------------------------------------\n');
   }
 }
 
 // Run tests
-runTests().catch(console.error);
+runTests().catch(log.error);

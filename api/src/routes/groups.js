@@ -1,3 +1,6 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("routes/groups");
+
 const express = require("express");
 const router = express.Router();
 const groupService = require("../services/groupService");
@@ -7,7 +10,7 @@ router.get("/active", async (req, res) => {
     const result = await groupService.getActiveGroups();
     res.status(200).json(result);
   } catch (err) {
-    console.error("GET /groups/active error:", err);
+    log.error("GET /groups/active error:", err);
     res.status(500).json({ error: err.message });
   }
 });

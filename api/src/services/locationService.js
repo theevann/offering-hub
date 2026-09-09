@@ -1,4 +1,8 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("location");
+
 const prisma = require("../db/prismaClient");
+const { Prisma } = require("@prisma/client");
 
 // This service will contain logic related to resolving and standardizing location information for parsed offerings.
 
@@ -10,51 +14,158 @@ const prisma = require("../db/prismaClient");
 // 5 Group fallback
 
 function normalizeLocation(text) {
-  if (!text || typeof text !== "string") return "";
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    if (!text || typeof text !== "string")
+        return "";
+
+    return text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")          // Remove accent marks
+        .replace(/[^\p{L}\p{N}\s]/gu, " ") // Keep letters across languages
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
-async function searchAliases(normalizedLocationName) {
-    if (!normalizedLocationName) return null;
+function buildVenueScope(group) {
+    switch (group.type) {
+        case "PRESENT":
+            const conditions = [];
+            if (group.country) {
+                conditions.push(Prisma.sql`v.country = ${group.country}`);
+            }
+            if (group.adminArea) {
+                conditions.push(Prisma.sql`v."adminArea" = ${group.adminArea}`);
+            }
+            if (group.city) {
+                conditions.push(Prisma.sql`v.city = ${group.city}`);
+            }
+            if (conditions.length === 0) return null;
+            return Prisma.join(conditions, " AND ");
 
-    let aliasMatch = await prisma.venueAlias.findFirst({
-        where: {
-            normalizedAlias: normalizedLocationName
-        },
-        include: { venue: true }
-    })
+        case "COUNTRY":
+            if (!group.country) return null;
+            return Prisma.sql`v.country = ${group.country}`;
 
-    if (!aliasMatch) {
-        const aliases = await prisma.$queryRaw`
-            SELECT a.*, v.*, similarity(a."normalizedAlias", ${normalizedLocationName}) AS "similarityScore"
-            FROM "VenueAlias" a
-            JOIN "Venue" v ON v.id = a."venueId"
-            WHERE similarity(a."normalizedAlias", ${normalizedLocationName}) > 0.6
-            ORDER BY similarity(a."normalizedAlias", ${normalizedLocationName}) DESC
-            LIMIT 3;
+        case "REGION":
+            if (!group.country || !group.adminArea) return null;
+            return Prisma.sql`
+            v.country = ${group.country}
+            AND v."adminArea" = ${group.adminArea}
         `;
 
-        console.log('Fuzzy alias search results for', normalizedLocationName, aliases);
-        
-        if (aliases.length > 0) {
-            aliasMatch = aliases[0]; // Take the best match for now, can be improved later
+        case "CITY":
+            if (!group.country || !group.city) return null;
+            return Prisma.sql`
+            v.country = ${group.country}
+            AND v.city = ${group.city}
+            ${group.adminArea
+                    ? Prisma.sql`AND v."adminArea" = ${group.adminArea}`
+                    : Prisma.empty
+                }
+        `;
+
+        case "VENUE":
+            if (!group.venueId) return null;
+            return Prisma.sql`v.id = ${group.venueId}`;
+
+        default:
+            return null;
+    }
+}
+
+async function searchAliases(parsedLocation, group) {
+    const normalizedLocationName = normalizeLocation(parsedLocation?.locationName);
+    if (!normalizedLocationName || !group) return null;
+
+    const scopeParsed = buildVenueScope({
+        type: "PRESENT",
+        country: parsedLocation?.country,
+        adminArea: parsedLocation?.adminArea,
+        city: parsedLocation?.city,
+    });
+
+    if (scopeParsed) {
+        log.debug("Alias search scope for parsed location:", JSON.stringify(scopeParsed?.values, null, 2));
+
+        const exactMatchesFromParsed = await prisma.$queryRaw`
+            SELECT a.*, row_to_json(v) AS venue
+            FROM "VenueAlias" a
+            JOIN "Venue" v ON v.id = a."venueId"
+            WHERE ${scopeParsed}
+            AND a."normalizedAlias" = ${normalizedLocationName}
+            ORDER BY a.id
+        `;
+
+        if (exactMatchesFromParsed.length > 0) {
+            if (exactMatchesFromParsed.length > 1) {
+                log.info(`Multiple exact alias matches found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed.map(a => a.alias));
+            } else {
+                log.info(`Exact alias match found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed[0].alias);
+                return exactMatchesFromParsed[0];
+            }
         }
+    } else {
+        log.debug("No parsed location scope");
     }
 
-    return aliasMatch
+    const scopeGroup = buildVenueScope(group);
+    if (!scopeGroup) return null;
+
+    log.debug("Alias search scope for group location:", JSON.stringify(scopeGroup?.values, null, 2));
+
+    const exactMatchesFromGroup = await prisma.$queryRaw`
+        SELECT a.*, row_to_json(v) AS venue
+        FROM "VenueAlias" a
+        JOIN "Venue" v ON v.id = a."venueId"
+        WHERE ${scopeGroup}
+          AND a."normalizedAlias" = ${normalizedLocationName}
+        ORDER BY a.id
+        LIMIT 1
+    `;
+
+    return exactMatchesFromGroup[0] ?? null;
+
+    // if (exactMatchesFromGroup.length > 0) {
+    //     return exactMatchesFromGroup[0];
+    // }
+
+    // const fuzzyMatches = await prisma.$queryRaw`
+    //     SELECT a.*, row_to_json(v) AS venue, similarity(a."normalizedAlias", ${normalizedLocationName}) AS "similarityScore"
+    //     FROM "VenueAlias" a
+    //     JOIN "Venue" v ON v.id = a."venueId"
+    //     WHERE ${scopeGroup}
+    //     AND similarity(a."normalizedAlias", ${normalizedLocationName}) > 0.6
+    //     ORDER BY similarity(a."normalizedAlias", ${normalizedLocationName}) DESC
+    //     LIMIT 3;
+    // `;
+
+    // log.info('Fuzzy alias search results for', normalizedLocationName, JSON.stringify(fuzzyMatches, null, 2));
+
+    // return fuzzyMatches[0] ?? null;
+}
+
+async function getVenueFromPlaceId(googlePlaceId) {
+    if (!googlePlaceId) return null;
+
+    return await prisma.venue.findUnique({
+        where: { googlePlaceId },
+    });
 }
 
 async function addNewVenueFromPlaces(place) {
+    const city = place.addressComponents?.find(
+        c => c.types?.includes("locality") || c.types?.includes("postal_town"))?.longText ?? null;
+    const adminArea = place.addressComponents?.find(c => c.types?.includes("administrative_area_level_1"))?.longText ?? null;
+    const country = place.addressComponents?.find(c => c.types?.includes("country"))?.longText ?? null;
+
     return prisma.venue.create({
         data: {
             displayName: place.displayName.text,
             normalizedName: normalizeLocation(place.displayName.text),
             address: place.formattedAddress,
+            city: city,
+            adminArea: adminArea,
+            country: country,
             googlePlaceId: place.id,
             mapsUrl: place.googleMapsUri,
             latitude: place.location.latitude,
@@ -63,6 +174,9 @@ async function addNewVenueFromPlaces(place) {
         select: {
             id: true,
             displayName: true,
+            city: true,
+            adminArea: true,
+            country: true,
             googlePlaceId: true,
             latitude: true,
             longitude: true,
@@ -73,6 +187,19 @@ async function addNewVenueFromPlaces(place) {
 
 async function addVenueAlias(venueId, aliasText, source, similarityScore = 0) {
     const normalizedAlias = normalizeLocation(aliasText);
+    if (!venueId || !normalizedAlias) return null;
+
+    const existingAlias = await prisma.venueAlias.findFirst({
+        where: {
+            venueId: venueId,
+            normalizedAlias: normalizedAlias,
+        },
+    });
+
+    if (existingAlias) {
+        return existingAlias;
+    }
+
     return prisma.venueAlias.create({
         data: {
             alias: aliasText,
@@ -82,25 +209,40 @@ async function addVenueAlias(venueId, aliasText, source, similarityScore = 0) {
             confidence: similarityScore,
         },
     });
-    
+
 }
 
-function buildPlacesTextQuery(parsedLocation, group) {
-    const parts = [];
-    if (parsedLocation?.locationName) parts.push(parsedLocation.locationName.trim());
-    if (parsedLocation?.addressFragment) parts.push(parsedLocation.addressFragment.trim());
-    if (group?.city) parts.push(group.city.trim());
-    if (group?.adminArea) parts.push(group.adminArea.trim());
-    if (group?.country) parts.push(group.country.trim());
+function buildPlacesTextQuery(location, group) {
+    if (!location) return null;
 
-    const query = parts.filter(Boolean).join(", ").trim();
-    return query || null;
+    const hasExplicitGeography =
+        location.city || location.adminArea || location.country;
+
+    const geography = hasExplicitGeography
+        ? [location.city, location.adminArea, location.country]
+        : [group?.city || group?.adminArea, group?.country];
+
+    const parts = [
+        location.locationName,
+        location.addressFragment,
+        ...geography
+    ];
+
+    return parts
+        .map(part => part?.trim())
+        .filter(Boolean)
+        .join(", ") || null;
 }
 
 async function searchGooglePlacesText(parsedLocation, group) {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-        console.log("GOOGLE_MAPS_API_KEY is not set. Skipping Places text search.");
+        log.warn("GOOGLE_MAPS_API_KEY is not set. Skipping Places text search.");
+        return null;
+    }
+
+    if (!parsedLocation?.locationName && !parsedLocation?.addressFragment && !parsedLocation?.city) {
+        log.info("No location name, address fragment or city provided, skipping Places text search.");
         return null;
     }
 
@@ -109,20 +251,38 @@ async function searchGooglePlacesText(parsedLocation, group) {
         return null;
     }
 
+    let payload = {
+        textQuery,
+    };
+
+    if (group?.latitude && group?.longitude) {
+        payload.locationBias = {
+            circle: {
+                center: {
+                    latitude: group.latitude,
+                    longitude: group.longitude
+                },
+                radius: (group?.radiusKm ?? 0) * 1000
+            }
+        };
+    }
+
+    log.debug("Searching Google Places with query:", textQuery);
+
     try {
         const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "X-Goog-Api-Key": apiKey,
-                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri"
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.primaryType,places.types,places.addressComponents"
             },
-            body: JSON.stringify({ textQuery })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.log(`Google Places text search failed (${response.status}): ${errorText}`);
+            log.warn(`Google Places text search failed (${response.status}): ${errorText}`);
             return null;
         }
 
@@ -156,23 +316,28 @@ async function searchGooglePlacesText(parsedLocation, group) {
         //     }
         // ]};
 
-        // console.log("Google Places text search results for query:", textQuery, JSON.stringify(data, null, 2));
-        
+        // log.info("Google Places text search results for query:", textQuery, JSON.stringify(data, null, 2));
+
+        // log.info("Google Places text search results:", data?.places?.map(place => ({
+        //     id: place.id,
+        //     displayName: place.displayName?.text,
+        //     formattedAddress: place.formattedAddress,
+        //     latitude: place.location?.latitude,
+        //     longitude: place.location?.longitude
+        // })));
+
         const topPlace = data?.places?.[0];
         if (!topPlace?.location) return null;
 
         return topPlace;
     } catch (error) {
-        console.log("Google Places text search error:", error.message);
+        log.warn("Google Places text search error:", error.message);
         return null;
     }
 }
 
 async function resolveLocation(parsedLocation, group) {
-    //if not locationName or addressFragment is present, return null
-    if (!parsedLocation?.locationName?.trim() && !parsedLocation?.addressFragment?.trim()) {
-        return null;
-    }
+    parsedLocation = parsedLocation || {};
 
     const location = {
         source: "UNKNOWN",
@@ -181,59 +346,53 @@ async function resolveLocation(parsedLocation, group) {
         venueId: null,
     };
 
+    // if not locationName or addressFragment is present, return null
+    // if (!parsedLocation?.locationName?.trim() && !parsedLocation?.addressFragment?.trim()) {
+    //     return location;
+    // }
+
     const normalizedLocationName = normalizeLocation(parsedLocation.locationName);
-    
+
     // 1 - Google maps url (TODO)
 
 
     // 2 - Alias table search
-    const aliasMatch = await searchAliases(normalizedLocationName);
-    
+    const aliasMatch = await searchAliases(parsedLocation, group);
+
     if (aliasMatch) {
+        // ### For now, we will not do fuzzy matching and send to gmaps if the alis is not an exact match. ###
         // Add new alias if the parsed location name is different from the existing normalized alias
-        if (normalizedLocationName && aliasMatch.normalizedAlias !== normalizedLocationName) {
-            const aliasText = parsedLocation.locationName;
-            try {
-                await addVenueAlias(aliasMatch.venueId, aliasText, "FUZZY_MATCH", aliasMatch.similarityScore);
-            } catch (error) {
-                console.log("Failed to add new venue alias:", error.message);
-            }
-        }
+        // if (aliasMatch.normalizedAlias !== normalizedLocationName && aliasMatch.similarityScore > 0.8) {
+        //     await addVenueAlias(aliasMatch.venueId, parsedLocation.locationName, "FUZZY_MATCH", aliasMatch.similarityScore);
+        // }
+        // log.info("Top Alias result:", aliasMatch?.alias, "| Venue:", aliasMatch?.venue?.displayName, "| Similarity Score:", aliasMatch?.similarityScore || 1);
+
+        log.info("Alias result:", aliasMatch?.alias, "| Venue:", aliasMatch?.venue?.displayName);
+
+
         location.source = "ALIAS_MATCH";
         location.venueId = aliasMatch.venueId ?? null;
         location.latitude = aliasMatch.venue?.latitude ?? null;
         location.longitude = aliasMatch.venue?.longitude ?? null;
         return location;
     }
+    log.info("No alias match found for:", normalizedLocationName);
 
 
     // 3 - Google Places text search
     const topPlace = await searchGooglePlacesText(parsedLocation, group);
-    
+    // log.info("Top Google Place result:", JSON.stringify(topPlace, null, 2));
+
     if (topPlace?.id && topPlace?.displayName?.text) {
-        // Add to venue table if not already present
-        let venue = await prisma.venue.findUnique({ where: { googlePlaceId: topPlace.id } });
-        if (!venue) {
-            try {
-                venue = await addNewVenueFromPlaces(topPlace);
-                location.venueId = venue.id;
-                console.log("Added new venue from Google Places data:", venue.displayName);
-            } catch (error) {
-                console.log("Failed to add new venue from Google Places data:", error.message);
-            }
+        let venue = await getVenueFromPlaceId(topPlace.id) || await addNewVenueFromPlaces(topPlace);
+        location.venueId = venue.id;
+
+        await addVenueAlias(venue.id, topPlace.displayName.text, "GOOGLE_PLACE");
+        if (normalizeLocation(topPlace.displayName.text) !== normalizedLocationName) {
+            await addVenueAlias(venue.id, parsedLocation.locationName, "GOOGLE_PLACE");
         }
 
-        // Add alias for the place name
-        if (venue) {
-            try {
-                await addVenueAlias(venue.id, topPlace.displayName.text, "GOOGLE_PLACE");
-                if (normalizedLocationName && normalizeLocation(topPlace.displayName.text) !== normalizedLocationName) {
-                    await addVenueAlias(venue.id, parsedLocation.locationName, "GOOGLE_PLACE");
-                }
-            } catch (error) {
-                console.log("Failed to add venue alias for Google Place:", error.message);
-            }
-        }
+        log.info("Found venue on Google Places:", venue.displayName, venue.city ?? "", venue.country ?? "");
     }
 
     if (topPlace?.location?.latitude != null && topPlace?.location?.longitude != null) {
@@ -254,4 +413,4 @@ async function resolveLocation(parsedLocation, group) {
     return location;
 }
 
-module.exports = { resolveLocation, buildPlacesTextQuery };
+module.exports = { resolveLocation, buildPlacesTextQuery, normalizeLocation, searchAliases, buildVenueScope };

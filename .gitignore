@@ -44,6 +44,7 @@ tmp/
 temp/
 bot/.wwebjs_cache/
 bot/session
+data/
 
 # Local databases
 *.sqlite

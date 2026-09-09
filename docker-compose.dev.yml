@@ -14,7 +14,8 @@ services:
       - /app/node_modules
     environment:
       NODE_ENV: development
-      DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
+    env_file:
+      - ./api/.env
     depends_on:
       db:
         condition: service_healthy
@@ -26,9 +27,15 @@ services:
       - ./bot/src:/app/src
     environment:
       NODE_ENV: development
-      API_BASE_URL: http://api:3000
     env_file:
       - ./bot/.env
+    command:
+      - ./node_modules/.bin/nodemon
+      - --signal
+      - SIGTERM
+      - -i
+      - logs/
+      - src/index.js
 
   # web:
   #   volumes:

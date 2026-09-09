@@ -7,7 +7,7 @@ async function getActiveGroups() {
     },
     select: {
       id: true,
-      whatsappId: true,
+      sourceId: true,
       name: true,
       type: true,
       country: true,

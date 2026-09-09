@@ -1,11 +1,15 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("testResolveLocation");
+
 // testResolveLocation.js
-const { resolveLocation } = require("./locationService");
+const { resolveLocation, normalizeLocation, searchAliases, buildVenueScope } = require("./locationService");
 
 async function run() {
   const parsedLocation = {
     // locationName: "Unsung",
     // locationName: "Unsung café",
-    locationName: "Senses yoga",
+    // locationName: "Sênses yoga",
+    locationName: "# yoga shack",
     // addressFragment: "Weligama"
     // addressFragment: "Weligama"
   };
@@ -13,16 +17,28 @@ async function run() {
   const group = {
     // city: "Weligama",
     adminArea: "Southern Province",
-    country: "Sri Lanka"
+    country: "Sri Lanka",
+    type: "CITY",
   };
 
-  const result = await resolveLocation(parsedLocation, group);
+  const normalizedLocationName = normalizeLocation(parsedLocation.locationName);
+  log.info("Normalized Location Name:", normalizedLocationName);
 
-  console.log("Result:", result);
+  const scope = buildVenueScope(group);
+  log.info("Venue Scope:", scope);
+
+  const aliases = await searchAliases(normalizedLocationName, group);
+  if (aliases) {
+    log.info("Found alias match:", aliases);
+  }
+
+  // const result = await resolveLocation(parsedLocation, group);
+  // log.info("Result:", result);
+
 }
 
 run().catch((error) => {
-  console.error("Error:", error);
+  log.error("Error:", error);
   process.exit(1);
 });
 

@@ -9,30 +9,31 @@ const DEDUP_DAYS = Number(process.env.DEDUP_DAYS) || 2;
 let seenHashes = new Set();
 
 /**
- * Compute MD5 hash of text content
+ * Compute sha256 hash of text content
  * @param {string} text 
- * @returns {string} MD5 hash as hex string
+ * @param {string} media_data - Media data
+ * @returns {string} sha256 hash as hex string
  */
-function computeHash(text) {
-    return crypto.createHash('md5').update(text).digest('hex');
+function computeHash(body_str, media_str="") {
+    return crypto.createHash('sha256').update(body_str).update(media_str).digest('hex');
 }
 
 /**
  * Check if a message is a duplicate by looking up its hash
- * @param {object} msg - Message object with rawText property
+ * @param {string} body - Message body
+ * @param {object} media - Media object
+ * @param {boolean} addToSeenHashes - Whether to add the hash to the seen set
  * @returns {boolean} True if duplicate
  */
-function checkDuplicate(msg) {
-    const hash = computeHash(msg.rawText);
-    return seenHashes.has(hash);
-}
+function isDuplicate(body, media, addToSeenHashes = false) {
+    const hash = computeHash(body, media?.data || '');
+    const seen = seenHashes.has(hash);
 
-/**
- * Add a message's hash to the seen set
- * @param {object} msg - Message object with rawText property
- */
-function addToSeenHashes(msg) {
-    seenHashes.add(computeHash(msg.rawText));
+    if (!seen && addToSeenHashes) {
+        seenHashes.add(hash);
+    }
+
+    return seen;
 }
 
 /**
@@ -68,7 +69,7 @@ async function loadHashesFromFile(dateStr) {
         
         for (const line of lines) {
             const obj = JSON.parse(line);
-            hashes.push(obj.contentHash || computeHash(obj.rawText));
+            hashes.push(obj.contentHash);
         }
         
         // console.log(`Loaded ${hashes.length} hashes from ${dateStr}`);
@@ -83,7 +84,6 @@ async function loadHashesFromFile(dateStr) {
 
 module.exports = {
     computeHash,
-    checkDuplicate,
-    addToSeenHashes,
+    isDuplicate,
     loadSeenHashes
 };
