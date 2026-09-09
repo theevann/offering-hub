@@ -18,6 +18,7 @@
 - [ ] Return the full LLM response from deduplication #deduplication
 - [ ] Adapt deduplication by category; for undated offerings, check same-category offerings that have not expired #deduplication
 - [ ] Use expiry time in deduplication #deduplication
+- [ ] If a duplicate is found, also maybe merge info !
 
 ## Location
 
@@ -39,15 +40,14 @@
 
 ## In Progress
 
-- [ ] Handle one raw message producing multiple offerings #parsing
-- [ ] Handle recurring events, adding occurrences only for the next week #parsing
-
 ## Done
 
 - [x] Make a Trello-like board with linked [implementation notes and examples](todo-notes.md)
 - [x] Skip parsing exact duplicates or messages with fewer than 50 characters and no image #parsing
 - [x] Implement the parsing stage #parsing
 - [x] Check for deduplication when date, time, and category match #deduplication
+- [x] Handle recurring events, adding occurrences only for the next week #parsing
+- [x] Handle one raw message producing multiple offerings #parsing
 
 %% kanban:settings
 {"lane-width":270,"date-format":"YYYY-MM-DD","time-format":"HH:mm","show-checkboxes":true,"new-card-insertion-method":"append","hide-card-count":false,"move-tags":true,"tag-action":"kanban","tag-colors":[],"tag-sort":[],"move-dates":true,"date-trigger":"@","time-trigger":"@","date-display-format":"YYYY-MM-DD","show-relative-date":false,"date-picker-week-start":1,"archive-with-date":false,"append-archive-date":false,"archive-date-separator":" ","archive-date-format":"YYYY-MM-DD","max-archive-size":-1,"inline-metadata-position":"body","move-task-metadata":true,"new-note-template":"","new-note-folder":"","show-add-list":true,"show-archive-all":true,"show-view-as-markdown":true,"show-board-settings":true,"show-search":true,"show-set-view":true,"full-list-lane-width":false,"show-title":true}
