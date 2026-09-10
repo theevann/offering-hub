@@ -3,6 +3,9 @@ const log = createLogger("location");
 
 const prisma = require("../db/prismaClient");
 const { Prisma } = require("@prisma/client");
+const { createHash } = require("node:crypto");
+
+const GOOGLE_QUERY_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 // This service will contain logic related to resolving and standardizing location information for parsed offerings.
 
@@ -93,6 +96,7 @@ async function searchAliases(parsedLocation, group) {
             JOIN "Venue" v ON v.id = a."venueId"
             WHERE ${scopeParsed}
             AND a."normalizedAlias" = ${normalizedLocationName}
+            AND a.source <> 'GOOGLE_QUERY'
             ORDER BY a.id
         `;
 
@@ -119,6 +123,7 @@ async function searchAliases(parsedLocation, group) {
         JOIN "Venue" v ON v.id = a."venueId"
         WHERE ${scopeGroup}
           AND a."normalizedAlias" = ${normalizedLocationName}
+          AND a.source <> 'GOOGLE_QUERY'
         ORDER BY a.id
         LIMIT 1
     `;
@@ -158,8 +163,10 @@ async function addNewVenueFromPlaces(place) {
     const adminArea = place.addressComponents?.find(c => c.types?.includes("administrative_area_level_1"))?.longText ?? null;
     const country = place.addressComponents?.find(c => c.types?.includes("country"))?.longText ?? null;
 
-    return prisma.venue.create({
-        data: {
+    return prisma.venue.upsert({
+        where: { googlePlaceId: place.id },
+        update: {},
+        create: {
             displayName: place.displayName.text,
             normalizedName: normalizeLocation(place.displayName.text),
             address: place.formattedAddress,
@@ -189,19 +196,12 @@ async function addVenueAlias(venueId, aliasText, source, similarityScore = 0) {
     const normalizedAlias = normalizeLocation(aliasText);
     if (!venueId || !normalizedAlias) return null;
 
-    const existingAlias = await prisma.venueAlias.findFirst({
+    return prisma.venueAlias.upsert({
         where: {
-            venueId: venueId,
-            normalizedAlias: normalizedAlias,
+            venueId_normalizedAlias: { venueId, normalizedAlias },
         },
-    });
-
-    if (existingAlias) {
-        return existingAlias;
-    }
-
-    return prisma.venueAlias.create({
-        data: {
+        update: {},
+        create: {
             alias: aliasText,
             normalizedAlias: normalizedAlias,
             venueId: venueId,
@@ -234,13 +234,7 @@ function buildPlacesTextQuery(location, group) {
         .join(", ") || null;
 }
 
-async function searchGooglePlacesText(parsedLocation, group) {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-        log.warn("GOOGLE_MAPS_API_KEY is not set. Skipping Places text search.");
-        return null;
-    }
-
+function buildPlacesRequest(parsedLocation, group) {
     if (!parsedLocation?.locationName && !parsedLocation?.addressFragment && !parsedLocation?.city) {
         log.info("No location name, address fragment or city provided, skipping Places text search.");
         return null;
@@ -251,11 +245,11 @@ async function searchGooglePlacesText(parsedLocation, group) {
         return null;
     }
 
-    let payload = {
+    const payload = {
         textQuery,
     };
 
-    if (group?.latitude && group?.longitude) {
+    if (Number.isFinite(group?.latitude) && Number.isFinite(group?.longitude)) {
         payload.locationBias = {
             circle: {
                 center: {
@@ -267,7 +261,55 @@ async function searchGooglePlacesText(parsedLocation, group) {
         };
     }
 
-    log.debug("Searching Google Places with query:", textQuery);
+    return payload;
+}
+
+function getGoogleQueryHash(payload) {
+    // buildPlacesRequest uses a fixed property order. Hash the exact body sent to Google;
+    // bump the version if request defaults or resolution semantics change.
+    return `gplaces:v1:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+}
+
+async function findGoogleQueryVenue(queryHash) {
+    const matches = await prisma.venueAlias.findMany({
+        where: {
+            normalizedAlias: queryHash,
+            source: "GOOGLE_QUERY",
+            updatedAt: { gt: new Date(Date.now() - GOOGLE_QUERY_CACHE_TTL_MS) },
+        },
+        include: { venue: true },
+        take: 2,
+    });
+    // The existing constraint is per venue, so a hash can have conflicting matches.
+    if (matches.length > 1) {
+        log.warn("Ambiguous Google query cache entry:", queryHash);
+    }
+    return matches.length === 1 ? matches[0].venue : null;
+}
+
+async function saveGoogleQueryVenue(queryHash, payload, venueId) {
+    return prisma.venueAlias.upsert({
+        where: { venueId_normalizedAlias: { venueId, normalizedAlias: queryHash } },
+        create: {
+            alias: payload.textQuery,
+            normalizedAlias: queryHash,
+            venueId,
+            source: "GOOGLE_QUERY",
+        },
+        // Refresh this venue's mapping. Expired mappings to other venues remain ignored.
+        update: { alias: payload.textQuery, updatedAt: new Date() },
+    });
+}
+
+async function searchGooglePlacesText(payload) {
+    if (!payload) return null;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+        log.warn("GOOGLE_MAPS_API_KEY is not set. Skipping Places text search.");
+        return null;
+    }
+
+    log.debug("Searching Google Places with query:", payload.textQuery);
 
     try {
         const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
@@ -327,7 +369,8 @@ async function searchGooglePlacesText(parsedLocation, group) {
         // })));
 
         const topPlace = data?.places?.[0];
-        if (!topPlace?.location) return null;
+        if (!Number.isFinite(topPlace?.location?.latitude) ||
+            !Number.isFinite(topPlace?.location?.longitude)) return null;
 
         return topPlace;
     } catch (error) {
@@ -379,8 +422,23 @@ async function resolveLocation(parsedLocation, group) {
     log.info("No alias match found for:", normalizedLocationName);
 
 
-    // 3 - Google Places text search
-    const topPlace = await searchGooglePlacesText(parsedLocation, group);
+    // 3 - Exact Google query cache. The request already contains its geographic context;
+    const payload = buildPlacesRequest(parsedLocation, group);
+    const queryHash = payload ? getGoogleQueryHash(payload) : null;
+    const cachedVenue = queryHash ? await findGoogleQueryVenue(queryHash) : null;
+    if (cachedVenue) {
+        await addVenueAlias(cachedVenue.id, parsedLocation.locationName, "GOOGLE_PLACE");
+        log.info("Google query cache hit:", payload.textQuery, "| Venue:", cachedVenue.displayName);
+        return {
+            source: "ALIAS_MATCH",
+            venueId: cachedVenue.id,
+            latitude: cachedVenue.latitude,
+            longitude: cachedVenue.longitude,
+        };
+    }
+
+    // 4 - Google Places text search
+    const topPlace = await searchGooglePlacesText(payload);
     // log.info("Top Google Place result:", JSON.stringify(topPlace, null, 2));
 
     if (topPlace?.id && topPlace?.displayName?.text) {
@@ -392,6 +450,8 @@ async function resolveLocation(parsedLocation, group) {
             await addVenueAlias(venue.id, parsedLocation.locationName, "GOOGLE_PLACE");
         }
 
+        await saveGoogleQueryVenue(queryHash, payload, venue.id);
+
         log.info("Found venue on Google Places:", venue.displayName, venue.city ?? "", venue.country ?? "");
     }
 
@@ -402,7 +462,7 @@ async function resolveLocation(parsedLocation, group) {
         return location;
     }
 
-    // 4 - Group center fallback
+    // 5 - Group center fallback
     if (group?.latitude != null && group?.longitude != null) {
         location.source = "GROUP_FALLBACK";
         location.latitude = group.latitude;

@@ -44,6 +44,7 @@ dev-reset-db:
 	cd api && npx prisma migrate reset -f
 	cd api && npx prisma generate
 	$(DEV_COMPOSE) up -d
+	$(DEV_COMPOSE) restart api
 
 prod-reset-db:
 	$(PROD_COMPOSE) down --remove-orphans

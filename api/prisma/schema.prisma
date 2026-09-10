@@ -41,6 +41,7 @@ enum AliasSource {
   FUZZY_MATCH
   GOOGLE_MAPS_URL
   GOOGLE_PLACE
+  GOOGLE_QUERY
 }
 
 enum MediaType {
@@ -139,6 +140,7 @@ model VenueAlias {
   updatedAt DateTime @updatedAt
 
   @@unique([venueId, normalizedAlias]) // Could happen that two different venues have the same alias, eg in different countries
+  @@index([source, normalizedAlias]) // Google query lookup has no venue/geography scope.
 }
 
 model RawMessage {

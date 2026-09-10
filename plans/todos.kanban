@@ -20,6 +20,15 @@
       "title": "API",
       "cards": [
         {
+          "id": "d19566a7-70c6-48bf-88f0-a477a63724fc",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Fix: Silently fails when all LLM fail",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "b2df85f1-f197-4a79-b159-5162f3cafb4f",
           "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
           "title": "Decide category-specific expiresAt defaults; currently endTime or seven days after creation",
@@ -119,15 +128,6 @@
       "title": "Location",
       "cards": [
         {
-          "id": "88deb5d9-1646-4451-b3ab-7f9395c163cd",
-          "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
-          "title": "Keep a google maps search cache / history",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
           "id": "225250dc-c8e5-484f-b409-c7d3b4456e76",
           "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
           "title": "Extract locations from Google Maps links in messages",
@@ -152,9 +152,9 @@
       "title": "Parsing",
       "cards": [
         {
-          "id": "5baed48e-c80d-4c3f-8938-4ba0f0f3bbec",
+          "id": "6ef52b65-0366-4a1f-9fa6-4f94de902945",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
-          "title": "Handle SALE and RENTAL start/end dates",
+          "title": "Add an optional per-group cheap-model offering pre-check returning : the offerings if there are <3 of them. A call for a bigger model if there are > 3.",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -170,9 +170,27 @@
           "comments": []
         },
         {
+          "id": "74a4db2f-75b1-4564-9fe5-a069a09bde7f",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Combine multipart messages from the same user and group within a proposed two-minute window",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
           "id": "cf827172-582b-41ef-b9aa-392da2b81ed4",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
           "title": "Define and extract offering tags such as meditation, yoga, breathwork, and ecstatic dance",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "5baed48e-c80d-4c3f-8938-4ba0f0f3bbec",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "Handle SALE and RENTAL start/end dates",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -197,36 +215,81 @@
           "comments": []
         },
         {
-          "id": "23f393d6-b21a-4586-9c1c-04907a8289ff",
+          "id": "fe100a52-cf0e-49d1-ac1b-91d4d1968b85",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
-          "title": "Validate date handling against the [example messages](todo-notes.md#examples), including February 23/24, 2026 and PARSE_PARTIAL for uncertain dates",
+          "title": "Locations:",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "6ef52b65-0366-4a1f-9fa6-4f94de902945",
+          "id": "0f4e1966-45b3-4d10-b97b-423e49bdfb45",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
-          "title": "Add an optional per-group cheap-model offering pre-check returning : the offerings if there are <3 of them. A call for a bigger model if there are > 3.",
+          "title": "- Store each distinct offering location once in the top-level locations array.",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "74a4db2f-75b1-4564-9fe5-a069a09bde7f",
+          "id": "e904706e-8db1-4de4-8cb4-87468967eb03",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
-          "title": "Combine multipart messages from the same user and group within a proposed two-minute window",
+          "title": "- Each location contains: id, locationName, addressFragment, city, adminArea, country, url, rawLocationText.",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "0fb208bc-e483-4773-b920-93024e80a324",
+          "id": "2b0b9daa-130b-4180-901c-22dee89037d3",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
-          "title": "Parse contact information, including phone and email",
+          "title": "Use a top-level locations array and a locationId on each offering. This avoids repeating the same address across offerings.",
+          "description": "Locations:\n\n- Store each distinct offering location once in the top-level locations array.\n- Each location contains: id, locationName, addressFragment, city, adminArea, country, url, rawLocationText.\n- Assign IDs such as \"loc_1\", \"loc_2\", unique within the response. Offerings sharing a location reference the same ID.\n- Merge location descriptions only when they clearly identify the same place and their details are compatible.\n- Extract only explicitly stated offering locations. Preserve explicit geography; never infer it from group context or general knowledge.\n- addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording.\n- Use null for missing location fields. If no location is given, use locationId: null; do not create an empty location object.\n- Every non-null locationId MUST reference an existing location.",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ce913bb7-8d9c-443b-a23f-23b4f336cb6a",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "- Merge location descriptions only when they clearly identify the same place and their details are compatible.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "30fe0508-fbf3-47a9-b599-c6fc67ccebc0",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "- Extract only explicitly stated offering locations. Preserve explicit geography; never infer it from group context or general knowledge.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "a4a62ac7-2793-43b3-956e-6123c97d6072",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "- addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "bb93ba57-72b9-44a1-97ee-2da6e05c7d28",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "- Use null for missing location fields. If no location is given, use locationId: null; do not create an empty location object.",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "6fda7547-968f-4cad-a805-9aa8db81b689",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "- Every non-null locationId MUST reference an existing location.",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -243,6 +306,33 @@
       "id": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
       "title": "Done",
       "cards": [
+        {
+          "id": "0fb208bc-e483-4773-b920-93024e80a324",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Parse contact information, including phone and email",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "82eaf16f-2cde-414d-9277-77800c21c502",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Use multiple dates in parsed offering",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "88deb5d9-1646-4451-b3ab-7f9395c163cd",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Keep a google maps search cache / history | Use alias table ?",
+          "description": "1. per ingestion\n2. in a table",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
         {
           "id": "da160a50-52fa-44f9-ad44-f994d2682fbd",
           "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
