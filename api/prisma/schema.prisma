@@ -38,10 +38,10 @@ enum GroupType {
 
 enum AliasSource {
   MANUAL
-  FUZZY_MATCH
   GOOGLE_MAPS_URL
+  FUZZY_MATCH  // For now, deprecated (we do not do fuzzy matching in the current system)
+  GOOGLE_QUERY_CACHE
   GOOGLE_PLACE
-  GOOGLE_QUERY
 }
 
 enum MediaType {
@@ -50,10 +50,9 @@ enum MediaType {
 
 enum LocationSource {
   GOOGLE_MAPS_URL
-  VENUE_MATCH
   ALIAS_MATCH
+  GOOGLE_QUERY_CACHE
   GOOGLE_PLACE
-  GEOCODE
   GROUP_FALLBACK
   UNKNOWN
 }

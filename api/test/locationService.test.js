@@ -92,7 +92,7 @@ function setup() {
     };
     return {
         load, aliases, venues, requests, aliasQueries, cacheReads,
-        queries: () => aliases.filter(a => a.source === "GOOGLE_QUERY"),
+        queries: () => aliases.filter(a => a.source === "GOOGLE_QUERY_CACHE"),
         setFetch: impl => { fetchImpl = impl; },
         setNameMatches: matches => { nameMatches = matches; },
     };
@@ -116,7 +116,7 @@ test("20 out-of-area resolutions share one persisted Google query, including aft
     assert.equal(cached.normalizedAlias,
         `gplaces:v1:${createHash("sha256").update(db.requests[0].body).digest("hex")}`);
     assert.ok(!("queryHash" in cached));
-    assert.ok(db.cacheReads.every(where => where.source === "GOOGLE_QUERY" && !("venueId" in where)));
+    assert.ok(db.cacheReads.every(where => where.source === "GOOGLE_QUERY_CACHE" && !("venueId" in where)));
 });
 
 test("query text, coordinates and radius distinguish requests; unrelated group metadata does not", async () => {
@@ -209,7 +209,7 @@ test("name alias matches take priority, and both geographic lookups exclude quer
     const service = db.load();
     await service.resolveLocation({ ...location, country: "Sri Lanka" }, group);
     assert.equal(db.aliasQueries.length, 2);
-    assert.ok(db.aliasQueries.every(q => q.text.includes("a.source <> 'GOOGLE_QUERY'")));
+    assert.ok(db.aliasQueries.every(q => q.text.includes("a.source <> 'GOOGLE_QUERY_CACHE'")));
     db.setNameMatches([{ venueId: "manual-venue", venue: { latitude: 1, longitude: 2 } }]);
     const result = await service.resolveLocation(location, group);
     assert.equal(result.venueId, "manual-venue");

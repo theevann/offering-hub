@@ -96,7 +96,7 @@ async function searchAliases(parsedLocation, group) {
             JOIN "Venue" v ON v.id = a."venueId"
             WHERE ${scopeParsed}
             AND a."normalizedAlias" = ${normalizedLocationName}
-            AND a.source <> 'GOOGLE_QUERY'
+            AND a.source <> 'GOOGLE_QUERY_CACHE'
             ORDER BY a.id
         `;
 
@@ -123,7 +123,7 @@ async function searchAliases(parsedLocation, group) {
         JOIN "Venue" v ON v.id = a."venueId"
         WHERE ${scopeGroup}
           AND a."normalizedAlias" = ${normalizedLocationName}
-          AND a.source <> 'GOOGLE_QUERY'
+          AND a.source <> 'GOOGLE_QUERY_CACHE'
         ORDER BY a.id
         LIMIT 1
     `;
@@ -274,7 +274,7 @@ async function findGoogleQueryVenue(queryHash) {
     const matches = await prisma.venueAlias.findMany({
         where: {
             normalizedAlias: queryHash,
-            source: "GOOGLE_QUERY",
+            source: "GOOGLE_QUERY_CACHE",
             updatedAt: { gt: new Date(Date.now() - GOOGLE_QUERY_CACHE_TTL_MS) },
         },
         include: { venue: true },
@@ -294,7 +294,7 @@ async function saveGoogleQueryVenue(queryHash, payload, venueId) {
             alias: payload.textQuery,
             normalizedAlias: queryHash,
             venueId,
-            source: "GOOGLE_QUERY",
+            source: "GOOGLE_QUERY_CACHE",
         },
         // Refresh this venue's mapping. Expired mappings to other venues remain ignored.
         update: { alias: payload.textQuery, updatedAt: new Date() },
@@ -430,7 +430,7 @@ async function resolveLocation(parsedLocation, group) {
         await addVenueAlias(cachedVenue.id, parsedLocation.locationName, "GOOGLE_PLACE");
         log.info("Google query cache hit:", payload.textQuery, "| Venue:", cachedVenue.displayName);
         return {
-            source: "ALIAS_MATCH",
+            source: "GOOGLE_QUERY_CACHE",
             venueId: cachedVenue.id,
             latitude: cachedVenue.latitude,
             longitude: cachedVenue.longitude,
