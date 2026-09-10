@@ -4,7 +4,7 @@ const log = createLogger("ingestion");
 const prisma = require("../db/prismaClient");
 const parsingService = require("./parsingService");
 const { resolveLocation } = require("./locationService");
-const { isDuplicate, computeHash, findRecentExactDuplicate } = require("./deduplicationService");
+const { checkDuplicate, computeHash, findRecentExactDuplicate } = require("./deduplicationService");
 const { DateTime } = require("luxon");
 const { get } = require("node:http");
 
@@ -264,8 +264,9 @@ async function createOffering(parsed, locationInfo, rawMessage, group) {
     const offeringData = buildOfferingData(parsed, rawMessage, locationInfo);
 
     // ### DEDUPLICATION CHECK ###
-    if (DEDUPLICATE ? await isDuplicate(offeringData, group) : false) {
-        log.debug(`Duplicate offering detected - skipping creation`);
+    const duplicateCheckResult = DEDUPLICATE ? await checkDuplicate(offeringData, group) : { isDuplicate: false };
+    if (DEDUPLICATE ? duplicateCheckResult.isDuplicate : false) {
+        log.info(`[${duplicateCheckResult.reason_code}] Duplicate offering ${duplicateCheckResult.matchingOfferingId} detected for message ${rawMessage.id} - Ignoring`);
         return null;
     }
 

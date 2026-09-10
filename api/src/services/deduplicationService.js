@@ -86,7 +86,7 @@ async function getNearbyOfferings(latitude, longitude, radiusMeters = 5000) {
 // Probably should end up being category specific, especially with SALES/RENTAL ...
 // Maybe let LLM flag some offerings for manual review if it is unsure
 // A slight change may also mean it is an updated offering (changes in time or location)
-async function isDuplicate(offeringData, group) {
+async function checkDuplicate(offeringData, group) {
     const startDateFilter = offeringData.startTime
         ? { OR: [{ startTime: null }, { startTime: offeringData.startTime }] } : {};
 
@@ -120,7 +120,13 @@ async function isDuplicate(offeringData, group) {
             }
         }
     });
-    if (compatibleOfferings.length === 0) return false;
+    if (compatibleOfferings.length === 0)
+        return {
+            isDuplicate: false,
+            matchingOfferingId: null,
+            reason_code: "NO_COMPATIBLE_OFFERINGS",
+            reason: "No compatible offerings found in the database"
+        }
 
     log.debug("Compatible offerings:", compatibleOfferings.map(o => prepareCandidateData(o)));
 
@@ -141,8 +147,13 @@ async function isDuplicate(offeringData, group) {
     );
 
     if (exactMatch) {
-        log.info(`Exact match found with existing offering ${exactMatch.id}: ${exactMatch.title}`);
-        return true;
+        log.debug(`Exact match found with existing offering ${exactMatch.id}: ${exactMatch.title}`);
+        return {
+            isDuplicate: true,
+            matchingOfferingId: exactMatch.id,
+            reason_code: "EXACT_MATCH",
+            reason: `Exact match found with existing offering ${exactMatch.id}`
+        };
     }
 
     // Score each existing offering against the new offering using overlap coefficient for title and description
@@ -166,7 +177,12 @@ async function isDuplicate(offeringData, group) {
             (o.titleScore >= TITLE_COMBINED_THRESHOLD &&
                 o.descScore >= DESC_COMBINED_THRESHOLD)
     );
-    if (candidates.length === 0) return false;
+    if (candidates.length === 0) return {
+        isDuplicate: false,
+        matchingOfferingId: null,
+        reason_code: "NO_CANDIDATES_AFTER_SCORING",
+        reason: "No candidates passed the scoring thresholds for title and description overlap"
+    };
 
     // Limit to top 5 candidates by combined score
     const topCandidates = candidates
@@ -225,10 +241,15 @@ Based on the details, is the new offering a duplicate of any of the existing can
         throw new Error("Non-duplicate response must have a null matching ID");
     }
 
-    log.info(`LLM Deduplication result: ${response.isDuplicate ? 'Duplicate' : 'Not a duplicate'}`);
+    log.debug(`LLM Deduplication result: ${response.isDuplicate ? 'Duplicate' : 'Not a duplicate'}`);
 
     // TODO: Change return type to include the matchingOfferingId and reason for better logging and debugging
-    return response.isDuplicate;
+    return {
+        isDuplicate: response.isDuplicate,
+        matchingOfferingId: response.matchingOfferingId,
+        reason_code: "LLM_DEDUPLICATION",
+        reason: `LLM deduplication result: ${response.reason}`
+    };
 }
 
 
@@ -263,7 +284,7 @@ async function findRecentExactDuplicate(contentHash) {
 }
 
 module.exports = {
-    isDuplicate,
+    checkDuplicate,
     computeHash,
     findRecentExactDuplicate
 };
