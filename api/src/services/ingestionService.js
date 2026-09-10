@@ -169,25 +169,25 @@ async function ingestRawMessage(data) {
 
 
     // ### OFFERING CREATION ###
-    // Parallel creation
+    // Parallel creation - Warn: no handling of "dates" field
     // const offerings = (
-    //     await Promise.all(parsedOfferings.map(parsed => createOffering(parsed, rawMessage, group)))
-    // ).filter(offering => offering !== null);
+    //     await Promise.all(parsedOfferings.map(parsed => createOfferingFromParsed(parsed, rawMessage, group)))
+    // ).flat()
     
     // offerings.forEach(offering => log.info(`Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`));
 
     // Sequential creation
     const offerings = [];
-    for (const parsed of parsedOfferings) {
-        const offering = await createOffering(parsed, rawMessage, group);
-        if (offering !== null) {
-            offerings.push(offering);
-            log.info(`> Created offering: ${offering.title} on ${offering.startTime} at venue: ${offering.venue?.displayName || 'unknown'}`)
-        }    
-    }    
+    const parsedLength = parsedOfferings.reduce((acc, parsed) => acc + (parsed.dates?.length || 0), 0);
 
-    const diffCount = parsedOfferings.length - offerings.length;
-    log.info(`Parsed: ${parsedOfferings.length}, Created: ${offerings.length}, Duplicates: ${diffCount}`);
+    for (const parsed of parsedOfferings) {
+        const createdOfferings = await createOfferingFromParsed(parsed, rawMessage, group);
+        offerings.push(...createdOfferings);
+    }
+
+    offerings.forEach(offering => log.info(`> Created offering: ${offering.title} on ${offering.startTime.toISOString()} at venue: ${offering.venue?.displayName || 'unknown'}`));
+
+    log.info(`Parsed: ${parsedLength}, Created: ${offerings.length}, Duplicates: ${parsedLength - offerings.length}`);
 
     // ### RAW MESSAGE UPDATE ###
     await prisma.rawMessage.update({
@@ -242,17 +242,30 @@ async function createRawMessage(source, messageId, senderId, senderName, senderP
     });
 }
 
-async function createOffering(parsed, rawMessage, group) {
-    // ### LOCATION RESOLUTION ###
+async function createOfferingFromParsed(parsed, rawMessage, group) {
+    const offerings = [];
+    const dates = parsed.dates;
+    parsed.dates = undefined;
+
     const locationInfo = await resolveLocation(parsed.location, group);
     log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
+    
+    for (const date of dates) {
+        const offering = await createOffering({ ...parsed, ...date }, locationInfo, rawMessage, group);
+        if (offering) {
+            offerings.push(offering);
+        }
+    }
+    return offerings;
+}
 
+async function createOffering(parsed, locationInfo, rawMessage, group) {
     // ### OFFERING DATA PREP ###
     const offeringData = buildOfferingData(parsed, rawMessage, locationInfo);
 
     // ### DEDUPLICATION CHECK ###
     if (DEDUPLICATE ? await isDuplicate(offeringData, group) : false) {
-        log.debug(`Duplicate offering detected for message ${rawMessage.id} - skipping creation`);
+        log.debug(`Duplicate offering detected - skipping creation`);
         return null;
     }
 
