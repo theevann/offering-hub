@@ -13,6 +13,7 @@ services:
       - "3000:3000"
     volumes:
       - ./data:/data:ro
+      - ./data/logs:/data/logs
       - ./api:/app
       - /app/node_modules
     environment:

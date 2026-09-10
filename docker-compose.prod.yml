@@ -17,6 +17,7 @@ services:
   api:
     volumes:
       - ./data-prod:/data:ro
+      - ./data-prod/logs/api:/app/logs
     build:
       target: prod-runtime
     restart: unless-stopped
