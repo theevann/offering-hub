@@ -474,3 +474,4 @@ async function resolveLocation(parsedLocation, group) {
 }
 
 module.exports = { resolveLocation, buildPlacesTextQuery, normalizeLocation, searchAliases, buildVenueScope };
+// IMPROVE returned value of resolve and use it in logging
