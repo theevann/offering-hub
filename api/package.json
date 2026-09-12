@@ -2,11 +2,11 @@
   "name": "api",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
     "test": "node --test test/*.test.js",
-    "dev": "nodemon src/index.js",
-    "dev:docker": "npx prisma generate && npm run dev",
+    "dev": "prisma generate && nodemon src/index.js",
+    "dev:worker": "prisma generate && nodemon --signal SIGTERM src/worker.js",
     "db:rebuild-migration": "node scripts/rebuild-initial-migration.js"
   },
   "keywords": [],

@@ -2,9 +2,9 @@
 # Do NOT ignore package.json or package-lock.json
 
 logs
-session
 node_modules
 npm-debug.log
+session
 yarn-debug.log
 yarn-error.log
 .DS_Store
@@ -21,6 +21,7 @@ tmp
 *.tgz
 .pnp
 .pnp.js
+.wwebjs_cache
 
 # macOS
 **/.DS_Store

@@ -86,9 +86,9 @@
       "title": "Deduplication",
       "cards": [
         {
-          "id": "9b6a52b7-fd03-4f09-8218-9752b22b1911",
+          "id": "38d6f2c0-6e8c-4d80-830f-c3fb338ae250",
           "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
-          "title": "Return the full LLM response from deduplication",
+          "title": "Use expiry time in deduplication",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -104,18 +104,18 @@
           "comments": []
         },
         {
-          "id": "38d6f2c0-6e8c-4d80-830f-c3fb338ae250",
+          "id": "6a3c0ad3-517e-4a55-884e-a0d2434bb539",
           "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
-          "title": "Use expiry time in deduplication",
+          "title": "If a duplicate is found, also maybe merge info !",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "6a3c0ad3-517e-4a55-884e-a0d2434bb539",
+          "id": "b5a53799-ef7d-418d-abe0-f2a7f05198e4",
           "listId": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
-          "title": "If a duplicate is found, also maybe merge info !",
+          "title": "Prevent throw without proper catch and fallback (see end of function)",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -131,6 +131,15 @@
           "id": "225250dc-c8e5-484f-b409-c7d3b4456e76",
           "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
           "title": "Extract locations from Google Maps links in messages",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "bb9b5b13-ddd3-4625-baae-2e89f487eb60",
+          "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
+          "title": "if only city is specified, RN it adds the city as a venue apparently - fix this behavior !",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -306,6 +315,15 @@
       "id": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
       "title": "Done",
       "cards": [
+        {
+          "id": "9b6a52b7-fd03-4f09-8218-9752b22b1911",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Return the full LLM response from deduplication",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
         {
           "id": "0fb208bc-e483-4773-b920-93024e80a324",
           "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",

@@ -7,6 +7,32 @@
     Run `make dev-containers` to start all DB, API, Bot, and Web in docker-compose.
     You need to check the logs of the bot container to scan the QR code for WhatsApp. You can do this with `docker compose logs -f bot`.
 
+### One-time bot volume permissions setup:
+
+On a new machine, after restoring volumes, or when switching from root to `USER node`, check the bot's mounted directories. The bot runs as UID/GID `1000:1000` and needs write access to `/app/session`, `/app/logs`, and `/data`, including existing files and subdirectories.
+
+- Fresh named volumes (`bot_session`, `bot_logs`) inherit the image directories' ownership when Docker initializes them.
+- Existing or restored volumes retain their ownership. Rebuilding the image does not fix their permissions.
+- Host bind mounts (`./data` in development, `./data-prod` in production) use host permissions. Ensure UID 1000 has write access to the bot's media directories, especially on Linux. Preserve access needed by other services sharing these directories.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec --user node bot sh -c '
+id
+ls -ldn /app/session /app/logs /data
+find /app/session /app/logs /data -maxdepth 2 \
+  \( ! -readable -o ! -writable \) -print
+'
+```
+
+If existing session/log files are root-owned, stop the bot and repair those two volumes once. From the project root, for development:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps --user root bot chown -R node:node /app/session /app/logs
+```
+
+For production, replace `docker-compose.dev.yml` with `docker-compose.prod.yml` in all commands. These commands preserve session/log contents and do not change `/data` permissions. Inspect and adjust host data-directory permissions separately if needed; do not recursively change ownership of the entire shared data directory without checking its other users.
+
+
 ### Use of DB during preprod development:
 - npm run db:rebuild-migration
 - npx prisma migrate reset

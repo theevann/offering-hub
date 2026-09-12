@@ -1,0 +1,1 @@
+console.log("Worker started with PID:", process.pid);

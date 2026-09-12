@@ -5,9 +5,7 @@ services:
     build:
       context: ./api
       target: prod-migrate
-    command: ["npm", "exec", "prisma", "migrate", "deploy"]
     environment:
-      NODE_ENV: production
       DATABASE_URL: "postgresql://${POSTGRES_USER:?required}:${POSTGRES_PASSWORD:?required}@db:5432/${POSTGRES_DB:?required}"
     depends_on:
       db:
@@ -15,6 +13,7 @@ services:
     restart: "no"
 
   api:
+    command: ["node", "src/index.js"]
     volumes:
       - ./data-prod:/data:ro
       - ./data-prod/logs/api:/app/logs
@@ -25,8 +24,25 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    environment:
-      NODE_ENV: production
+    env_file:
+      - ./api/.env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+
+  worker:
+    command: ["node", "src/worker.js"]
+    volumes:
+      - ./data-prod:/data:ro
+      - ./data-prod/logs/api:/app/logs
+    build:
+      target: prod-runtime
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
     env_file:
       - ./api/.env.prod
     depends_on:
@@ -41,8 +57,6 @@ services:
     build:
       target: prod-runtime
     # restart: unless-stopped
-    environment:
-      NODE_ENV: production
     env_file:
       - ./bot/.env.prod
 

@@ -9,6 +9,7 @@ services:
   api:
     build:
       target: dev
+    command: ["npm", "run", "dev"]
     ports:
       - "3000:3000"
     volumes:
@@ -16,8 +17,21 @@ services:
       - ./data/logs:/data/logs
       - ./api:/app
       - /app/node_modules
-    environment:
-      NODE_ENV: development
+    env_file:
+      - ./api/.env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      target: dev
+    command: ["npm", "run", "dev:worker"]
+    volumes:
+      - ./data:/data:ro
+      - ./data/logs:/data/logs
+      - ./api:/app
+      - /app/node_modules
     env_file:
       - ./api/.env
     depends_on:
@@ -30,17 +44,8 @@ services:
     volumes:
       - ./data:/data
       - ./bot/src:/app/src
-    environment:
-      NODE_ENV: development
     env_file:
       - ./bot/.env
-    command:
-      - ./node_modules/.bin/nodemon
-      - --signal
-      - SIGTERM
-      - -i
-      - logs/
-      - src/index.js
 
   # web:
   #   volumes:
