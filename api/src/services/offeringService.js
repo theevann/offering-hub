@@ -1,3 +1,6 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("offering");
+
 const prisma = require("../db/prismaClient");
 
 

@@ -1,9 +1,6 @@
 const { createLogger } = require("../utils/logger");
 const log = createLogger("prismaClient");
 
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config({ quiet: true })
-}
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require('@prisma/adapter-pg');
 

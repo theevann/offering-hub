@@ -1,11 +1,13 @@
+const { createLogger } = require("../utils/logger");
+const log = createLogger("deduplication");
+
 const fs = require("node:fs/promises");
 const path = require('path');
 const crypto = require("crypto");
 
 const prisma = require("../db/prismaClient");
 const { readModelList, callLLM } = require("./llmService");
-const { createLogger } = require("../utils/logger");
-const log = createLogger("deduplication");
+
 
 
 const EXACT_DEDUP_DAYS = 2

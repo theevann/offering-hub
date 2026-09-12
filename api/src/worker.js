@@ -1,4 +1,9 @@
-console.log("Worker started with PID:", process.pid);
+if (process.env.NODE_ENV !== 'production') {
+    require("dotenv").config({
+        path: require("node:path").join(__dirname, "../.env"),
+        quiet: true
+    });
+}
 
 const prisma = require("./db/prismaClient");
 const { createLogger } = require("./utils/logger");

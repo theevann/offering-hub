@@ -1,6 +1,3 @@
-const { createLogger } = require("../utils/logger");
-const log = createLogger("testParsing");
-
 /**
  * Standalone test script for the parsing service
  * 
@@ -13,6 +10,9 @@ const log = createLogger("testParsing");
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config({ path: __dirname + '/../../.env', quiet: true });
 }
+const { createLogger } = require("../utils/logger");
+const log = createLogger("testParsing");
+
 const { parse } = require('./parsingService');
 
 // Test cases

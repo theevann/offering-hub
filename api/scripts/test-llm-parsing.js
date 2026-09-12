@@ -1,6 +1,3 @@
-const { createLogger } = require("../src/utils/logger");
-const log = createLogger("test-llm-parsing");
-
 // Run from any directory: node /path/to/coie/api/scripts/test-llm-parsing.js
 // Makes 8 real LLM requests using api/.env. No database or Google Places calls.
 const fs = require('node:fs/promises');
@@ -16,6 +13,9 @@ const env = require('dotenv').config({
 if (env.error) {
   throw new Error(`Could not load environment file: ${envPath}`, { cause: env.error });
 }
+const { createLogger } = require("../src/utils/logger");
+const log = createLogger("test-llm-parsing");
+
 log.info(`Using environment file: ${envPath}`);
 
 const group = {

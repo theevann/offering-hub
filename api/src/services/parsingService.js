@@ -1,9 +1,6 @@
 const { createLogger } = require("../utils/logger");
 const log = createLogger("parsing");
 
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config({ quiet: true })
-}
 const { readModelList, callLLM } = require('./llmService');
 
 const TEXT_MODELS = readModelList("TEXT_MODELS");

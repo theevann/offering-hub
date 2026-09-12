@@ -1,10 +1,6 @@
 const { createLogger } = require("../utils/logger");
 const log = createLogger("llm");
 
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config({ quiet: true })
-}
-
 const { PROVIDERS } = require('../config/llmProviders');
 const STORAGE_PATH = process.env.STORAGE_PATH;
 log.debug(`STORAGE_PATH: ${STORAGE_PATH}`);
