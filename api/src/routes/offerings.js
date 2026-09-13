@@ -3,13 +3,23 @@ const log = createLogger("routes/offerings");
 
 const express = require("express");
 const router = express.Router();
-const offeringService = require("../services/offeringService");
+const { getNearbyOfferings } = require("../services/offeringService");
 
 function parseNearbyQuery(query) {
-  const lat = Number(query.lat);
-  const lng = Number(query.lng);
-  const radiusKm = query.radiusKm === undefined ? 10 : Number(query.radiusKm);
-  const limit = query.limit === undefined ? 20 : Number(query.limit);
+  function parseNumber(value, fallback = NaN) {
+    if (value === undefined) return fallback;
+    if (typeof value === "string") {
+      if (value.trim() === "") return fallback;
+      return Number(value);
+    }
+    return typeof value === "number" ? value : NaN;
+  }
+
+  const lat = parseNumber(query.lat);
+  const lng = parseNumber(query.lng);
+  const radiusKm = parseNumber(query.radiusKm, 10);
+  const limit = parseNumber(query.limit, 20);
+  const offset = parseNumber(query.offset, 0);
 
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
     throw new Error("lat must be a number between -90 and 90");
@@ -20,14 +30,18 @@ function parseNearbyQuery(query) {
   }
 
   if (!Number.isFinite(radiusKm) || radiusKm <= 0 || radiusKm > 500) {
-    throw new Error("radiusKm must be a number greater than 0 and at most 500");
+    throw new Error(`radiusKm must be a number greater than 0 and at most 500 (Here: ${radiusKm})`);
   }
 
   if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
     throw new Error("limit must be an integer between 1 and 100");
   }
 
-  return { lat, lng, radiusKm, limit };
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error("offset must be a non-negative integer");
+  }
+
+  return { lat, lng, radiusKm, limit, offset };
 }
 
 router.get("/all", async (req, res) => {
@@ -43,7 +57,7 @@ router.get("/all", async (req, res) => {
 router.get("/nearby", async (req, res) => {
   try {
     const query = parseNearbyQuery(req.query);
-    const result = await offeringService.getNearbyOfferings(query);
+    const result = await getNearbyOfferings(query);
     res.status(200).json(result);
   } catch (err) {
     const statusCode = err.message.includes("must be") ? 400 : 500;

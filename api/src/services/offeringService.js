@@ -67,33 +67,18 @@ async function getAllOfferings() {
   });
 }
 
-async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50 }) {
+async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50, offset = 0 }) {
   const radiusMeters = radiusKm * 1000;
+  log.info(`Searching for offerings near (${lat}, ${lng}) within ${radiusKm} km, limit ${limit}, offset ${offset}`);
 
-  return await prisma.$queryRaw`
+  // PostGIS selects the nearby IDs and calculates their distance.
+  const nearby = await prisma.$queryRaw`
     WITH user_location AS (
       SELECT ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography AS geom
     )
     SELECT
       o.id,
-      o.category,
-      o.title,
-      o.description,
-      o."startTime",
-      o."endTime",
-      o."pricingType",
-      o.price,
-      o.links,
-      o."locationSource",
-      o."locationText",
-      o.latitude,
-      o.longitude,
-      o."venueId",
-      o."groupId",
-      o."rawMessageId",
-      o."createdAt",
-      o."updatedAt",
-      o."expiresAt",
+      ST_AsGeoJSON(o.location)::json AS location,
       ROUND(
         (ST_Distance(o.location, ul.geom) / 1000.0)::numeric,
         3
@@ -103,11 +88,40 @@ async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50 }) {
     WHERE
       o.location IS NOT NULL
       AND (o."expiresAt" IS NULL OR o."expiresAt" > now())
-      AND (o."startTime" IS NULL OR o."startTime" > now())
+      AND (
+        o.category IN ('SERVICE', 'RENTAL', 'SALE')
+        OR o."startTime" IS NULL
+        OR o."startTime" >= date_trunc('day', now()) - interval '1 day'
+        OR o."endTime" > now()
+      )
       AND ST_DWithin(o.location, ul.geom, ${radiusMeters})
-    ORDER BY "distanceKm" ASC
+    ORDER BY "distanceKm" ASC, o.id ASC
     LIMIT ${limit}
+    OFFSET ${offset}
   `;
+
+  if (!nearby.length) return [];
+
+  // Prisma returns every supported scalar field and the related records.
+  const offerings = await prisma.offering.findMany({
+    where: { id: { in: nearby.map((offering) => offering.id) } },
+    include: {
+      venue: true,
+      group: true,
+      rawMessage: { include: { group: true } },
+      media: true,
+    },
+  });
+
+  // An IN query has no guaranteed order; restore the spatial query's order.
+  const byId = new Map(offerings.map((offering) => [offering.id, offering]));
+  return nearby
+    .filter(({ id }) => byId.has(id))
+    .map(({ id, location, distanceKm }) => ({
+      ...byId.get(id),
+      location,
+      distanceKm,
+    }));
 }
 
 async function getAllRawMessages_deprecated() {
