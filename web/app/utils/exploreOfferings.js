@@ -41,16 +41,19 @@ export function matchesDate(offering, selectedDate, view, timeZone) {
 }
 
 export function filterOfferings(offerings, { mode, view, selectedDate, search, topic, category, timeZone }) {
-    const words = `${search} ${topic}`.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
+    const words = `${search}`.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
     return offerings.filter((offering) => {
         const isMarketplace = marketplaceCategories.includes(offering.category)
         if (mode === 'events' && isMarketplace) return false
         if (mode === 'services' && offering.category !== 'SERVICE') return false
         if (mode === 'marketplace' && !['RENTAL', 'SALE'].includes(offering.category)) return false
         if (category && offering.category !== category) return false
+        if (topic && (!offering.topics || !offering.topics.includes(topic))) return false
+
         const text = [offering.title, offering.description, offering.locationText,
-            offering.venue?.displayName, offering.category, ...(Array.isArray(offering.tags) ? offering.tags : [])].join(' ').toLocaleLowerCase()
+            offering.venue?.displayName, offering.category, ...(Array.isArray(offering.topics) ? offering.topics : [])].join(' ').toLocaleLowerCase()
         if (!words.every((word) => text.includes(word))) return false
+
         return isMarketplace || matchesDate(offering, selectedDate, view, timeZone)
     }).sort((a, b) => mode !== 'events'
         ? Number(a.distanceKm) - Number(b.distanceKm)

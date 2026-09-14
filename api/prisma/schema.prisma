@@ -198,6 +198,7 @@ model Media {
 model Offering {
   id          String           @id @default(cuid())
   category    OfferingCategory
+  topics      String[]
   title       String
   description String?
   startTime   DateTime? // Full timestamp combining date + start time (timezone-aware)

@@ -125,7 +125,7 @@ watch([selectedDate, dateStrip, dateOptions], () => {
     if (buttonBounds.right > stripBounds.right) strip.scrollLeft += buttonBounds.right - stripBounds.right
     updateDateScrollHint()
 }, { flush: 'post' })
-const topics = ['Yoga', 'Breathwork', 'Music', 'Dance', 'Art']
+
 const marketplaceTypes = [
     { label: 'All', value: '' },
     { label: 'Rentals', value: 'RENTAL' }, { label: 'Sales', value: 'SALE' },
@@ -154,6 +154,16 @@ const matchingOfferings = computed(() => filterOfferings(offerings.value, {
     search: queryValue('q'), topic: browsingMode.value === 'events' ? selectedTopic.value : '',
     category: category.value, timeZone: timeZone.value,
 }))
+
+const topics = computed(() => {
+    const topicSet = new Set()
+    offerings.value.forEach(offering => {
+        // if (offering.topics?.length) offering.topics.forEach(topic => topicSet.add(topic))
+        if (offering.topics?.length) topicSet.add(offering.topics[0])
+    })
+    return Array.from(topicSet).sort((a, b) => a.localeCompare(b))
+})
+
 const dateMatchCounts = computed(() => {
     const allUpcomingMatches = filterOfferings(offerings.value, {
         mode: 'events', view: 'list', selectedDate: today.value, search: queryValue('q'),

@@ -159,6 +159,7 @@ function buildOfferingData(parsed, rawMessage, location, now = new Date()) {
 
     return {
         category: parsed.category,
+        topics: parsed.topics,
         title: parsed.title,
         description: parsed.description,
         startTime,
