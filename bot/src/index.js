@@ -163,6 +163,30 @@ function cleanupSingletonLocks(sessionDir) {
 function applyMessageKeyCompatibilityPatch() {
     // Temporary compatibility shim: this code must run inside WhatsApp's page.
     return client.pupPage.evaluate(() => {
+        // Temporary workaround for wwebjs issue #201908.
+        const manager = window.require('WAWebDownloadManager').downloadManager;
+
+        if (!manager.downloadAndMaybeDecrypt.coieMimePatched) {
+            const original = manager.downloadAndMaybeDecrypt;
+
+            function downloadWithMime(options, ...args) {
+                if (options.type === 'image' && !options.mimetype && options.directPath) {
+                    const msg = window.require('WAWebCollections').Msg
+                        .getModelsArray()
+                        .find(msg => msg.directPath === options.directPath);
+
+                    if (msg?.mimetype) {
+                        options = { ...options, mimetype: msg.mimetype };
+                    }
+                }
+
+                return original.call(this, options, ...args);
+            }
+
+            downloadWithMime.coieMimePatched = true;
+            manager.downloadAndMaybeDecrypt = downloadWithMime;
+        }
+
         const MsgKey = window.Store?.MsgKey || window.require('WAWebMsgKey');
         const p = MsgKey?.prototype;
         if (!p) throw new Error("WhatsApp MsgKey prototype is unavailable");
