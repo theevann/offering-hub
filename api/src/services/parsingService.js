@@ -43,7 +43,7 @@ Each offering must contain:
 - price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
 - location: object containing locationName, addressFragment, city, adminArea, country, url, rawLocationText. Fill only explicitly mentioned location details for this offering; never infer geography from group context or general knowledge. addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording. Use null for missing fields.
 - links: array of {"url":"...","type":"maps|booking|social|website|other"} relevant to this offering.
-- contactInfo: array of {"type":"phone|email|whatsapp|telegram|other","value":"..."} relevant to this offering.
+- contactInfo: array of {"type":"phone|email|whatsapp|telegram|other","value":"..."} relevant to this offering. Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Never invent missing details.
 
 Use null for missing values and [] for missing links or contactInfo. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
 

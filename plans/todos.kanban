@@ -16,72 +16,6 @@
       ]
     },
     {
-      "id": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
-      "title": "API",
-      "cards": [
-        {
-          "id": "d19566a7-70c6-48bf-88f0-a477a63724fc",
-          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
-          "title": "Fix: Silently fails when all LLM fail",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "b2df85f1-f197-4a79-b159-5162f3cafb4f",
-          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
-          "title": "Decide category-specific expiresAt defaults; currently endTime or seven days after creation",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "20310332-f867-4f8e-b918-f2b3aab78002",
-          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
-          "title": "Secure the groups and ingest endpoints",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "ed2366d5-1976-4f55-9090-419d8b8a6d00",
-          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
-          "title": "Build proper logger for all requests and responses",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
-    },
-    {
-      "id": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
-      "title": "Frontend",
-      "cards": [
-        {
-          "id": "a12bc2ac-e04d-4957-87cb-ba09be13844e",
-          "listId": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
-          "title": "Design a location-first frontend with server-side location filtering",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        },
-        {
-          "id": "aa4fefd7-c3e5-4eaa-8f89-9ef3af01a3a5",
-          "listId": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
-          "title": "Clarify the frontend “created at time” requirement",
-          "description": "",
-          "labels": [],
-          "checkboxes": [],
-          "comments": []
-        }
-      ]
-    },
-    {
       "id": "8f32831d-f72f-4763-9cbb-332ef59f8d3f",
       "title": "Deduplication",
       "cards": [
@@ -128,18 +62,18 @@
       "title": "Location",
       "cards": [
         {
-          "id": "225250dc-c8e5-484f-b409-c7d3b4456e76",
+          "id": "bb9b5b13-ddd3-4625-baae-2e89f487eb60",
           "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
-          "title": "Extract locations from Google Maps links in messages",
+          "title": "if only city is specified, RN it adds the city as a venue apparently - fix this behavior !",
           "description": "",
           "labels": [],
           "checkboxes": [],
           "comments": []
         },
         {
-          "id": "bb9b5b13-ddd3-4625-baae-2e89f487eb60",
+          "id": "225250dc-c8e5-484f-b409-c7d3b4456e76",
           "listId": "abee4463-773d-446f-b658-5afd84d3ee19",
-          "title": "if only city is specified, RN it adds the city as a venue apparently - fix this behavior !",
+          "title": "Extract locations from Google Maps links in messages",
           "description": "",
           "labels": [],
           "checkboxes": [],
@@ -160,6 +94,15 @@
       "id": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
       "title": "Parsing",
       "cards": [
+        {
+          "id": "d2e7eaef-2e76-477e-b79e-4846c3ac943e",
+          "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
+          "title": "properly parse socials",
+          "description": "e.g. @yoga_golden vs www.instagram.com/yoga_arugambay",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
         {
           "id": "6ef52b65-0366-4a1f-9fa6-4f94de902945",
           "listId": "578523e9-d0bb-43db-aae1-fdf4aa3c4363",
@@ -307,9 +250,92 @@
       ]
     },
     {
+      "id": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+      "title": "API",
+      "cards": [
+        {
+          "id": "5b961bbd-7271-4ada-b01c-362fa3a096a1",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "FIX bug for offerings with no dates and locations which are not venues (Ask LLM is_venue and Ask LLM for google search query)",
+          "description": "2026-09-12T18:53:03.311Z INFO [ingestion] > Receiving raw message from source: whatsapp, messageId: 3B68292A5BAA1870F282\n2026-09-12T18:53:03.583Z INFO [deduplication] Checking for recent duplicates with hash eee0b0a4ac56e96e4dee325bbd70b1db since 2026-09-10T18:53:03.583Z\n2026-09-12T18:53:03.921Z INFO [ingestion] Created rawMessage: cmtyqta14000003r2s41ewkjw from group: TEST GROUP - SRI LANKA\n2026-09-12T18:53:14.194Z INFO [worker] Processing message cmtyqta14000003r2s41ewkjw...\n2026-09-12T18:53:14.261Z DEBUG [llm] Converting image to base64: media/3B68292A5BAA1870F282.jpg, mimeType: image/jpeg\n2026-09-12T18:53:14.265Z INFO [llm] Calling gemini_3_5_flash_lite with model: google/gemini-3.5-flash-lite\n2026-09-12T18:53:18.692Z DEBUG [llm] Response metadata from gemini_3_5_flash_lite: {\n  id: 'gen-1789239194-pR4KJq8HLboZ05u9s6vr',\n  object: 'chat.completion',\n  created: 1789239194,\n  model: 'google/gemini-3.5-flash-lite',\n  provider: 'Google AI Studio',\n  system_fingerprint: null,\n  service_tier: 'default',\n  choices: [\n    {\n      index: 0,\n      logprobs: null,\n      finish_reason: 'stop',\n      native_finish_reason: 'STOP',\n      message: [Object]\n    }\n  ],\n  usage: {\n    prompt_tokens: 2311,\n    completion_tokens: 262,\n    total_tokens: 2573,\n    cost: 0,\n    is_byok: true,\n    prompt_tokens_details: {\n      cached_tokens: 0,\n      cache_write_tokens: 0,\n      audio_tokens: 0,\n      video_tokens: 0\n    },\n    cost_details: {\n      upstream_inference_cost: 0.0013483,\n      upstream_inference_prompt_cost: 0.0006933,\n      upstream_inference_completions_cost: 0.000655\n    },\n    completion_tokens_details: { reasoning_tokens: 0, image_tokens: 0, audio_tokens: 0 }\n  }\n}\n2026-09-12T18:53:18.698Z DEBUG [llm] Response content from gemini_3_5_flash_lite: {\n  \"offerings\": [\n    {\n      \"category\": \"SERVICE\",\n      \"title\": \"Home Visit Massage Services\",\n      \"description\": \"Home visit massage services by professionally trained blind massage therapists by Athinatha Wellness. Relieves stress, tension, and muscle discomfort in the comfort of your home.\",\n      \"dates\": [],\n      \"pricingType\": null,\n      \"price\": null,\n      \"location\": {\n        \"locationName\": \"Your Home\",\n        \"addressFragment\": null,\n        \"city\": null,\n        \"adminArea\": null,\n        \"country\": null,\n        \"url\": null,\n        \"rawLocationText\": \"Your Home\"\n      },\n      \"links\": [],\n      \"contactInfo\": [\n        {\n          \"type\": \"phone\",\n          \"value\": \"+94 710 358 624\"\n        },\n        {\n          \"type\": \"phone\",\n          \"value\": \"+94 77 922 41 92\"\n        },\n        {\n          \"type\": \"whatsapp\",\n          \"value\": \"+94 710 358 624\"\n        },\n        {\n          \"type\": \"whatsapp\",\n          \"value\": \"+94 77 922 41 92\"\n        }\n      ]\n    }\n  ],\n  \"parsingStatus\": \"PARSED_OK\",\n  \"parsingNotes\": null\n}\n2026-09-12T18:53:18.699Z INFO [processing] Parsed message cmtyqta14000003r2s41ewkjw with status: PARSED_OK\n2026-09-12T18:53:18.704Z DEBUG [location] No parsed location scope\n2026-09-12T18:53:18.706Z DEBUG [location] Alias search scope for group location: [\n  \"Sri Lanka\",\n  \"Southern Province\"\n]\n2026-09-12T18:53:18.771Z INFO [location] No alias match found for: your home\n2026-09-12T18:53:18.869Z DEBUG [location] Searching Google Places with query: Your Home, Southern Province, Sri Lanka\n2026-09-12T18:53:19.434Z INFO [location] Found venue on Google Places: Your own home in Sri Lanka Hikkaduwa Sri Lanka\n2026-09-12T18:53:19.435Z DEBUG [processing] Resolved location for message cmtyqta14000003r2s41ewkjw: {\n  source: 'GOOGLE_PLACE',\n  longitude: 80.1139984,\n  latitude: 6.1220002,\n  venueId: 'cmtyqtlyu0000hxkdvpnberpn'\n}\n2026-09-12T18:53:19.436Z INFO [processing] Parsed: 0, Created: 0, Duplicates: 0\n2026-09-12T18:53:19.443Z INFO [worker] Processing finished for message cmtyqta14000003r2s41ewkjw with status: PARSED_OK",
+          "labels": [
+            {
+              "id": "b0516f90-425f-4c9d-ab7a-2f703a1a91a2",
+              "title": "BUG",
+              "color": "#eb5a46"
+            }
+          ],
+          "checkboxes": [],
+          "comments": [
+            {
+              "id": "f5b4425c-3911-4729-9837-58cc0778f6fb",
+              "comment": "🌿 Relax, Rejuvenate & Heal in the Comfort of Your Home 🏡✨\n\nAthinatha Wellness proudly offers Home Visit Massage Services by our professionally trained Blind Massage Therapists.\n\nOur therapists bring exceptional skill, dedication, and healing touch directly to your doorstep, allowing you to enjoy a relaxing and therapeutic experience without leaving home.\n\n✨ Professional & experienced therapists\n✨ Convenient home visits\n✨ Relieves stress, tension, and muscle discomfort\n✨ Promotes relaxation and overall well-being\n✨ Supporting and empowering visually impaired professionals\n\nExperience the power of healing hands in the comfort of your own space.\n\n📞 Book Your Appointment Today\n📱 +94 710 358 624\n📱 +94 77 922 41 92\n\nAthinatha Wellness\nHealing Hands, Empowering Lives 💚"
+            }
+          ]
+        },
+        {
+          "id": "d19566a7-70c6-48bf-88f0-a477a63724fc",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Fix: Silently fails when all LLM fail",
+          "description": "",
+          "labels": [
+            {
+              "id": "b0516f90-425f-4c9d-ab7a-2f703a1a91a2",
+              "title": "BUG",
+              "color": "#eb5a46"
+            }
+          ],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "b2df85f1-f197-4a79-b159-5162f3cafb4f",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Decide category-specific expiresAt defaults; currently endTime or seven days after creation",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "20310332-f867-4f8e-b918-f2b3aab78002",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Secure the groups and ingest endpoints",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ed2366d5-1976-4f55-9090-419d8b8a6d00",
+          "listId": "fdb1636f-51c8-4963-b0a2-4bd3e9177de5",
+          "title": "Build proper logger for all requests and responses",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "a72614cc-a5a1-4596-8dce-130bc4b6edd9",
+      "title": "Frontend",
+      "cards": []
+    },
+    {
       "id": "5f1f08ca-9fc3-4e8f-b5fb-2ee946c0f5fe",
       "title": "In Progress",
-      "cards": []
+      "cards": [
+        {
+          "id": "a12bc2ac-e04d-4957-87cb-ba09be13844e",
+          "listId": "5f1f08ca-9fc3-4e8f-b5fb-2ee946c0f5fe",
+          "title": "Design a location-first frontend with server-side location filtering",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
     },
     {
       "id": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
@@ -413,6 +439,15 @@
           "labels": [],
           "checkboxes": [],
           "comments": []
+        },
+        {
+          "id": "b4ab5201-672f-4b47-96b5-a72527a6426f",
+          "listId": "d299fd90-7b82-438a-b4e1-5a847d0461c4",
+          "title": "Have processing done with a worker",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
         }
       ]
     }
@@ -422,6 +457,12 @@
     "cards": []
   },
   "settings": {
-    "labels": []
+    "labels": [
+      {
+        "id": "b0516f90-425f-4c9d-ab7a-2f703a1a91a2",
+        "title": "BUG",
+        "color": "#eb5a46"
+      }
+    ]
   }
 }

@@ -6,6 +6,8 @@ useSeoMeta({ title: 'Explore nearby — COIE' })
 definePageMeta({ scrollToTop: false })
 const route = useRoute()
 const router = useRouter()
+const lastExploreSearch = useState('last-explore-search', () => '')
+onBeforeRouteLeave(() => { lastExploreSearch.value = route.fullPath })
 
 // Query parameters keep searches shareable and preserve filters after opening details.
 function queryValue(name, fallback = '') {

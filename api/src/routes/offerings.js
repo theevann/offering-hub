@@ -3,7 +3,7 @@ const log = createLogger("routes/offerings");
 
 const express = require("express");
 const router = express.Router();
-const { getNearbyOfferings } = require("../services/offeringService");
+const { getNearbyOfferings, getOfferingById } = require("../services/offeringService");
 
 function parseNearbyQuery(query) {
   function parseNumber(value, fallback = NaN) {
@@ -66,15 +66,14 @@ router.get("/nearby", async (req, res) => {
   }
 });
 
-router.get("/raw/all", async (req, res) => {
-  res.status(410).json({ error: "This endpoint is deprecated and will be removed in the future." });
-  // TODO:
+router.get("/:id", async (req, res) => {
   try {
-    const result = await offeringService.getAllRawMessages_deprecated();
-    res.status(200).json(result);
-  } catch (err) {
-    log.error("GET /offerings/raw/all error:", err);
-    res.status(500).json({ error: err.message });
+    const offering = await getOfferingById(req.params.id);
+    if (!offering) return res.status(404).json({ error: "Offering not found." });
+    res.json(offering);
+  } catch (error) {
+    log.error("GET /offerings/:id error:", error);
+    res.status(500).json({ error: "Unable to load this offering." });
   }
 });
 

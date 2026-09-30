@@ -115,7 +115,12 @@ async function createOffering(parsed, locationInfo, rawMessage, group) {
 
     // ### OFFERING CREATION ###
     return await prisma.offering.create({
-        data: offeringData,
+        data: {
+            ...offeringData,
+            media: {
+                connect: rawMessage.media.map(media => ({ id: media.id })),
+            }
+        },
         select: {
             id: true,
             title: true,

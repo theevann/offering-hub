@@ -124,34 +124,16 @@ async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50, offset = 0 }
     }));
 }
 
-async function getAllRawMessages_deprecated() {
-  return await prisma.offering.findMany({
-    orderBy: { createdAt: "desc" },
+async function getOfferingById(id) {
+  return prisma.offering.findUnique({
+    where: { id },
     include: {
-      rawMessage: {
-        select: {
-          id: true,
-          parsingStatus: true,
-          parsingNotes: true,
-          messageId: true,
-          senderId: true,
-          senderName: true,
-          senderPhone: true,
-          timestamp: true,
-          group: {
-            select: {
-              id: true,
-              sourceId: true,
-              name: true,
-              country: true,
-              city: true,
-              timezone: true,
-            },
-          },
-        },
-      },
+      venue: true,
+      group: { select: { name: true, timezone: true } },
+      rawMessage: { select: { rawText: true, timestamp: true } },
+      media: { select: { id: true, type: true, url: true } },
     },
   });
 }
 
-module.exports = { getAllOfferings, getNearbyOfferings, getAllRawMessages_deprecated };
+module.exports = { getAllOfferings, getNearbyOfferings, getOfferingById };

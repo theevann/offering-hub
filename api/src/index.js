@@ -44,6 +44,16 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Expose saved photos only, not the rest of the shared storage directory.
+if (process.env.STORAGE_PATH) {
+  const path = require("node:path");
+  app.use("/media", express.static(path.resolve(process.env.STORAGE_PATH, "media"), {
+    dotfiles: "deny",
+    index: false,
+    setHeaders(res) { res.setHeader("X-Content-Type-Options", "nosniff"); },
+  }));
+}
+
 const ingestRouter = require("./routes/ingest");
 app.use("/ingest", ingestRouter);
 
