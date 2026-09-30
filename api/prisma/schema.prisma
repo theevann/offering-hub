@@ -226,8 +226,7 @@ model Offering {
   rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
 
   media Media[]
-  links Json? // Extracted links from the message (e.g. [{ "url": "https://example.com", "type": "registration" }])
-  contactInfo Json? // TODO: Extracted contact info (e.g. [{ "type": "phone", "value": "+1234567890" }])
+  resources Json @default("[]") // [{ value, channel, purposes: [] }]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

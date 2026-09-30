@@ -17,25 +17,40 @@ export function offeringPhotoUrl(value) {
     return savedPhoto ? `/api/media/${encodeURIComponent(savedPhoto[1])}` : webUrl(value)
 }
 
-export function offeringContacts(contacts) {
-    if (!Array.isArray(contacts)) return []
-    return contacts.filter(contact => typeof contact?.value === 'string').map(contact => {
-        const value = contact.value.trim()
+export function offeringResources(resources) {
+    if (!Array.isArray(resources)) return []
+    return resources.filter(resource => typeof resource?.value === 'string').map(resource => {
+        const value = resource.value.trim()
+        const channel = resource.channel
+        const purposes = Array.isArray(resource.purposes) ? resource.purposes : []
         let href = ''
-        let label = value
-        if (contact.type === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        if (channel === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
             href = `mailto:${encodeURIComponent(value)}`
-            label = 'Send an email'
-        } else if (['phone', 'whatsapp'].includes(contact.type) && /^\+?[\d ()-]+$/.test(value)) {
-            const phone = value.replace(/[^\d+]/g, '')
-            if (/^\+?\d{7,15}$/.test(phone)) {
-                href = contact.type === 'whatsapp' ? `https://wa.me/${phone.replace('+', '')}` : `tel:${phone}`
-                label = contact.type === 'whatsapp' ? 'Contact on WhatsApp' : 'Call'
-            }
-        } else {
-            href = webUrl(value)
-            if (href) label = contact.type === 'telegram' ? 'Contact on Telegram' : 'Contact'
+        } else if (channel === 'phone' && /^\+?\d{7,15}$/.test(value)) {
+            href = `tel:${value}`
+        } else if (channel === 'whatsapp' && /^\+\d{7,15}$/.test(value)) {
+            href = `https://wa.me/${value.slice(1)}`
+        } else if (['url', 'whatsapp', 'telegram'].includes(channel)) {
+            const url = webUrl(value)
+            const host = url ? new URL(url).hostname : ''
+            if (channel === 'url' || (channel === 'whatsapp' && host === 'chat.whatsapp.com')
+                || (channel === 'telegram' && host === 't.me')) href = url
         }
-        return { value, href, label }
+        const booking = purposes.includes('booking')
+        const payment = purposes.includes('payment')
+        const labels = { email: 'Send an email', phone: 'Call', whatsapp: 'Contact on WhatsApp', telegram: 'Contact on Telegram', url: 'Open link' }
+        const bookingLabels = { email: 'Book by email', phone: 'Call to book', whatsapp: 'Book via WhatsApp', telegram: 'Book via Telegram', url: 'Book / sign up' }
+        let label = booking ? bookingLabels[channel] : labels[channel]
+        if (payment) label = 'Payment details'
+        else if (!booking && channel === 'url') {
+            if (purposes.includes('location')) label = 'Get directions'
+            else if (purposes.includes('social')) label = 'Social page'
+            else if (purposes.includes('community')) label = 'Join community'
+            else if (purposes.includes('information')) label = 'More information'
+            else if (purposes.includes('inquiry')) label = 'Ask a question'
+        } else if (!booking && purposes.includes('community')) {
+            label = channel === 'whatsapp' ? 'Join WhatsApp group' : 'Join Telegram community'
+        }
+        return { value, channel, purposes, href, label: label || value }
     })
 }

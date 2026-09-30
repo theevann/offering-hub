@@ -90,7 +90,12 @@ async function createOfferingFromParsed(parsed, rawMessage) {
     const dates = parsed.dates;
     parsed.dates = undefined;
 
-    const locationInfo = await resolveLocation(parsed.location, rawMessage.group);
+    const locationResource = parsed.resources?.find(resource =>
+        resource.channel === 'url' && resource.purposes.includes('location'));
+    const locationInfo = await resolveLocation({
+        ...parsed.location,
+        url: parsed.location?.url || locationResource?.value,
+    }, rawMessage.group);
     log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
     
     for (const date of dates) {
@@ -173,8 +178,7 @@ function buildOfferingData(parsed, rawMessage, location, now = new Date()) {
 
         pricingType: parsed.pricingType,
         price: parsed.price,
-        links: parsed.links,
-        contactInfo: parsed.contactInfo,
+        resources: parsed.resources,
 
         locationSource: location.source,
         locationText: parsed.location?.rawLocationText ?? null,

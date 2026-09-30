@@ -1,7 +1,7 @@
 <script setup>
 import { dateKey, formatDay } from '~/utils/exploreOfferings'
 import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel } from '~/utils/offeringPresentation'
-import { webUrl, offeringContacts, offeringPhotoUrl } from '~/utils/offeringLinks'
+import { webUrl, offeringResources, offeringPhotoUrl } from '~/utils/offeringLinks'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,15 +17,10 @@ const dateLabel = computed(() => {
     return offeringDateRange(offering.value, timeZone.value)
         || formatDay(dateKey(offering.value.startTime, timeZone.value), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 })
-const links = computed(() => (Array.isArray(offering.value?.links) ? offering.value.links : [])
-    .map(link => ({ ...link, url: webUrl(link?.url) })).filter(link => link.url))
-const bookingLink = computed(() => links.value.find(link => ['booking', 'registration'].includes(link.type)))
-const otherLinks = computed(() => links.value.filter(link => link !== bookingLink.value && link.type !== 'maps'))
-const contacts = computed(() => offeringContacts(offering.value?.contactInfo))
-const primaryAction = computed(() => bookingLink.value
-    || contacts.value.find(contact => contact.href)
-    || otherLinks.value.find(link => link.type === 'website')
-    || otherLinks.value[0])
+const resources = computed(() => offeringResources(offering.value?.resources))
+const contactActions = computed(() => resources.value.filter(resource => !resource.purposes.includes('location') && !resource.purposes.includes('payment')))
+const paymentActions = computed(() => resources.value.filter(resource => resource.purposes.includes('payment')))
+const locationActions = computed(() => resources.value.filter(resource => resource.purposes.includes('location') && !resource.purposes.includes('payment')))
 const photoDialog = ref(null)
 function closePhotoOnBackdrop(event) {
     if (event.target === photoDialog.value) photoDialog.value.close()
@@ -39,7 +34,7 @@ const photo = computed(function () {
 const directionsUrl = computed(() => {
     if (!offering.value) return ''
     const venue = offering.value.venue
-    const supplied = webUrl(venue?.mapsUrl) || links.value.find(link => link.type === 'maps')?.url
+    const supplied = webUrl(venue?.mapsUrl) || locationActions.value.find(resource => resource.href)?.href
     if (supplied) return supplied
     if (offering.value.locationSource === 'GROUP_FALLBACK') return ''
     const lat = offering.value.latitude ?? venue?.latitude
@@ -71,16 +66,6 @@ function updatedLabel(value) {
     return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: timeZone.value }).format(new Date(value))
 }
 
-const linkLabels = {
-    maps: 'Get directions',
-    booking: 'Book',
-    registration: 'Register',
-    social: 'Social page',
-    whatsapp: 'WhatsApp Group',
-    telegram: 'Telegram Group',
-    website: 'Website',
-    other: 'More info',
-}
 </script>
 
 <template>
@@ -134,6 +119,10 @@ const linkLabels = {
                                 <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener noreferrer">{{ offering.venue.address }}</a>
                                 <template v-else>{{ offering.venue.address }}</template>
                             </p>
+                            <p v-for="resource in locationActions" :key="resource.value">
+                                <a v-if="resource.href" :href="resource.href" target="_blank" rel="noopener noreferrer">Get directions</a>
+                                <span v-else>{{ resource.value }}</span>
+                            </p>
                             <p v-if="offering.locationSource === 'GROUP_FALLBACK'" class="muted">Approximate area from the community. Confirm the exact location with the organiser.</p>
                         </section>
                         <section><h2>Price</h2><p class="detail-value">{{ offeringPriceLabel(offering) }}</p></section>
@@ -142,23 +131,27 @@ const linkLabels = {
                             <h2>About this offering</h2>
                             <p class="description">{{ offering.description || 'No description was provided. Check the original message below for details.' }}</p>
                         </section>
-                        <section class="contact-actions" aria-label="Booking and contact">
-                            <a v-if="bookingLink" class="contact-action primary-action" :href="bookingLink.url" target="_blank" rel="noopener noreferrer" :title="bookingLink.url">
-                                <span>{{ linkLabels[bookingLink.type] }}</span>
-                                <small>{{ actionDetail(bookingLink.url) }}</small>
-                            </a>
-                            <template v-for="contact in contacts" :key="contact.value">
-                                <a v-if="contact.href" class="contact-action" :class="{ 'primary-action': contact === primaryAction }" :href="contact.href" :title="contact.value" target="_blank" rel="noopener noreferrer">
-                                    <span>{{ contact.label }}</span>
-                                    <small>{{ actionDetail(contact.value) }}</small>
+                        <section v-if="contactActions.length" class="contact-actions" aria-label="Booking and contact">
+                            <template v-for="resource in contactActions" :key="`${resource.channel}:${resource.value}`">
+                                <a v-if="resource.href" class="contact-action" :class="{ 'primary-action': resource.purposes.includes('booking') }"
+                                    :href="resource.href" :title="resource.value" target="_blank" rel="noopener noreferrer">
+                                    <span>{{ resource.label }}</span>
+                                    <small>{{ actionDetail(resource.value) }}</small>
                                 </a>
-                                <p v-else>{{ contact.value }}</p>
+                                <p v-else>{{ resource.value }}</p>
                             </template>
-                            <a class="contact-action" :class="{ 'primary-action': link === primaryAction }" v-for="link in otherLinks" :key="link.url" :href="link.url" target="_blank" rel="noopener noreferrer" :title="link.url">
-                                <span>{{ linkLabels[link.type] }}</span>
-                                <small>{{ actionDetail(link.url) }}</small>
-                            </a>
-                            <!-- <a class="contact-action" v-if="!bookingLink && !contacts.some(contact => contact.href) && offering.rawMessage?.rawText" href="#original-message">See original message for details</a> -->
+                        </section>
+                        <section v-if="paymentActions.length" class="payment-section" aria-label="Payment">
+                            <h2>Payment</h2>
+                            <div class="contact-actions">
+                                <template v-for="resource in paymentActions" :key="`${resource.channel}:${resource.value}`">
+                                    <a v-if="resource.href" class="contact-action" :href="resource.href" target="_blank" rel="noopener noreferrer">
+                                        <span>{{ resource.label }}</span>
+                                        <small>{{ actionDetail(resource.value) }}</small>
+                                    </a>
+                                    <p v-else>{{ resource.value }}</p>
+                                </template>
+                            </div>
                         </section>
                     </div>
                 </div>
@@ -456,7 +449,7 @@ blockquote {
     .detail-content {
         display: contents;
     }
-    .practical-details, .contact-actions {
+    .practical-details, .contact-actions, .payment-section {
         grid-column: 1 / -1;
     }
     .practical-details {

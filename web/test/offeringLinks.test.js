@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { webUrl, offeringContacts, offeringPhotoUrl } from '../app/utils/offeringLinks.js'
+import { webUrl, offeringResources, offeringPhotoUrl } from '../app/utils/offeringLinks.js'
 
 test('saved photos use the media endpoint without accepting arbitrary paths', () => {
     assert.equal(offeringPhotoUrl('media/ABC123.jpg'), '/api/media/ABC123.jpg')
@@ -16,16 +16,33 @@ test('parsed web links cannot execute scripts or load local files', () => {
     assert.equal(webUrl('https://example.com/book'), 'https://example.com/book')
 })
 
-test('contact actions follow the extracted contact type', () => {
-    const contacts = offeringContacts([
-        { type: 'phone', value: '+33 6 12 34 56 78' },
-        { type: 'whatsapp', value: '+94 77 123 4567' },
-        { type: 'email', value: 'hello@example.com' },
-        { type: 'other', value: 'Ask at the studio' },
+test('resources use explicit purposes for every booking method', () => {
+    const actions = offeringResources([
+        { channel: 'whatsapp', value: '+94771234567', purposes: ['booking'] },
+        { channel: 'email', value: 'hello@example.com', purposes: ['booking', 'inquiry'] },
+        { channel: 'phone', value: '+33612345678', purposes: [] },
+        { channel: 'url', value: 'https://example.com/pay', purposes: ['payment'] },
+        { channel: 'whatsapp', value: '0771234567', purposes: [] },
     ])
-    assert.equal(contacts[0].href, 'tel:+33612345678')
-    assert.equal(contacts[1].href, 'https://wa.me/94771234567')
-    assert.equal(contacts[2].href, 'mailto:hello%40example.com')
-    assert.equal(contacts[3].href, '')
-    assert.deepEqual(offeringContacts(null), [])
+    assert.equal(actions[0].href, 'https://wa.me/94771234567')
+    assert.equal(actions[0].label, 'Book via WhatsApp')
+    assert.equal(actions[1].label, 'Book by email')
+    assert.equal(actions[1].href, 'mailto:hello%40example.com')
+    assert.equal(actions[2].label, 'Call')
+    assert.equal(actions[3].label, 'Payment details')
+    assert.equal(actions[4].href, '') // Local number cannot safely form a wa.me destination.
+    assert.deepEqual(offeringResources(null), [])
+})
+
+test('resources reject unsafe links and retain community destinations', () => {
+    const actions = offeringResources([
+        { channel: 'url', value: 'javascript:alert(1)' },
+        { channel: 'whatsapp', value: 'https://example.com' },
+        { channel: 'whatsapp', value: 'https://chat.whatsapp.com/Invite', purposes: ['community'] },
+        { channel: 'telegram', value: 'https://t.me/studio', purposes: ['community'] },
+    ])
+    assert.equal(actions[0].href, '')
+    assert.equal(actions[1].href, '')
+    assert.equal(actions[2].label, 'Join WhatsApp group')
+    assert.equal(actions[3].href, 'https://t.me/studio')
 })

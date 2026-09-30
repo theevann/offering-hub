@@ -1,3 +1,4 @@
+const { normalizeResources } = require('../utils/offeringResources');
 const { createLogger } = require("../utils/logger");
 const log = createLogger("parsing");
 
@@ -42,10 +43,10 @@ Each offering must contain:
 - pricingType: "free", "fixed", "donation", "range", or null. Treat a mandatory donation amount as fixed.
 - price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
 - location: object containing locationName, addressFragment, city, adminArea, country, url, rawLocationText. Fill only explicitly mentioned location details for this offering; never infer geography from group context or general knowledge. addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording. Use null for missing fields.
-- links: array of {"url":"...","type":"maps|booking|social|website|other"} relevant to this offering.
-- contactInfo: array of {"type":"phone|email|whatsapp|telegram|other","value":"..."} relevant to this offering. Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Never invent missing details.
+- resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration/application. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location. Copy a location resource URL into location.url when it identifies this offering's location.
+- Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Direct WhatsApp links become WhatsApp numbers; preserve WhatsApp group invite URLs. Telegram usernames become https://t.me/username. Never assume a phone number supports WhatsApp. Merge equivalent destinations and combine purposes, but retain phone and WhatsApp as separate channels. Never invent missing destinations: preserve instructions such as "DM me to book" in description when no destination is provided.
 
-Use null for missing values and [] for missing links or contactInfo. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
+Use null for missing values and [] for missing resources. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
 
 parsingStatus:
 - PARSED_OK: all offerings and occurrences extracted with their key details.
@@ -160,8 +161,7 @@ async function parse({ rawText, media, timestamp, group }) {
             pricingType: event.pricingType || null,
             price: event.price || null,
             location: event.location || null,
-            links: event.links || null,
-            contactInfo: event.contactInfo || null,
+            resources: normalizeResources(event.resources),
             latitude: null,
             longitude: null
         }));
