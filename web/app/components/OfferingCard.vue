@@ -10,6 +10,7 @@ const props = defineProps({
 const timeLabel = computed(() => offeringTimeLabel(props.offering, props.timeZone, props.selectedDate))
 const dateRange = computed(() => offeringDateRange(props.offering, props.timeZone))
 const priceLabel = computed(() => offeringPriceLabel(props.offering))
+const summary = computed(() => props.offering.summary || props.offering.description)
 </script>
 
 <template>
@@ -22,8 +23,7 @@ const priceLabel = computed(() => offeringPriceLabel(props.offering))
             </p>
             <p v-if="offering.locationSource === 'GROUP_FALLBACK'" class="location-note">Approximate location</p>
             <p v-if="dateRange">{{ dateRange }}</p>
-            <!-- The agenda stays compact; longer descriptions belong on the detail page. -->
-            <p v-if="!showTime && offering.description" class="description">{{ offering.description }}</p>
+            <p v-if="summary" class="description">{{ summary }}</p>
         </div>
         <div class="metadata">
             <span class="price" :class="{ unspecified: priceLabel === 'Price not specified' }">{{ priceLabel }}</span>

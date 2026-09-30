@@ -35,7 +35,8 @@ Each offering must contain:
 - category: one of ${VALID_CATEGORIES.map(c => `"${c}"`).join(', ')}. CLASS for recurring structured sessions; RETREAT for multi-day immersive experiences; WORKSHOP for one-off educational events; GATHERING for social events; SERVICE for ongoing services; SALE for items for sale; RENTAL for rentals; OTHER if unclear.
 - topics: array of 0–5 reusable labels for the main activities, subjects, services, or items offered. Use lowercase English, preferably 1–3 words; translate terms and normalize synonyms to common names. Include a useful broader activity for specialized topics (e.g. "vinyasa yoga" → ["yoga", "vinyasa yoga"]). Include only topics supported by this offering, not incidental mentions. Exclude locations, dates, audiences, promotional wording, and format labels such as class, retreat, service, sale, or rental. Avoid vague labels ("wellness", "experience") and near-duplicate synonyms. Return [] if none.
 - title: concise, max 100 characters.
-- description: summarize this offering only; remove WhatsApp artifacts.
+- summary: one factual sentence, ideally 10–20 words, highlighting this offering's distinguishing features; omit logistics shown separately.
+- description: concise explanation of this offering only. Preserve useful specifics, requirements, inclusions, and conditions; remove repetition, promotional filler, and WhatsApp artifacts. Use short paragraphs or plain-text bullets where helpful. Do not embellish.
 - dates: array of occurrence objects, ordered chronologically. Each object contains:
   - dateStart, dateEnd: YYYY-MM-DD or null. Infer relative dates and omitted years from the message timestamp. dateEnd is this occurrence's end date, normally dateStart for a single-day event.
   - startTime, endTime: HH:MM, 24-hour format, or null. Derive end time/date from explicit duration when possible.
@@ -150,6 +151,7 @@ async function parse({ rawText, media, timestamp, group }) {
             category: normalizeCategory(event.category),
             topics: event.topics || [],
             title: event.title || null,
+            summary: typeof event.summary === 'string' ? event.summary.trim() || null : null,
             description: event.description || null,
             dates: event.dates.map(date => ({
                 dateStart: date.dateStart || null,

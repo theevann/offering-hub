@@ -200,6 +200,7 @@ model Offering {
   category    OfferingCategory
   topics      String[]
   title       String
+  summary     String?
   description String?
   startTime   DateTime? // Full timestamp combining date + start time (timezone-aware)
   endTime     DateTime? // Full timestamp combining date + end time (timezone-aware)
