@@ -1,4 +1,13 @@
 const PROVIDERS = {
+    bitdeer_glm_5_3_flash: {
+        url: 'https://api-inference.bitdeer.ai/v1/chat/completions',
+        model: 'zai-org/GLM-5.3-Flash',
+        envKey: 'BITDEER_API_KEY',
+        maxTokensField: 'max_tokens',
+        maxTokens: 10000,
+        temperature: 1,
+        vision: true
+    },
     deepseek: {
         url: 'https://api.deepseek.com/v1/chat/completions',
         model: 'deepseek-chat',
@@ -134,6 +143,15 @@ const PROVIDERS = {
         vision: true,
         // reasoning: { effort: 'low' } // should be reasoning_effort for muse but not supporting it for now
         reasoning_effort: 'minimal'
+    },
+    mimo_v2_6_pro: {
+        url: 'https://api.primalabs.ai/v1/chat/completions',
+        model: 'primalabs-ai/MiMo-V2.6-Pro',
+        envKey: 'PRIMALABS_API_KEY',
+        maxTokensField: 'max_completion_tokens',
+        maxTokens: 10000,
+        temperature: 1,
+        vision: true,
     }
 };
 
