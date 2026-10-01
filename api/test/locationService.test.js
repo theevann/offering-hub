@@ -10,7 +10,7 @@ const group = {
     type: "REGION", country: "Sri Lanka", adminArea: "Southern Province",
     latitude: 5.96, longitude: 80.39, radiusKm: 50,
 };
-const location = { venueName: "Mountain Studio" };
+const location = { modes: ["at_provider"], venueName: "Mountain Studio" };
 const place = {
     id: "place-1", types: ["establishment"], displayName: { text: "Mountain Studio" },
     formattedAddress: "Kandy, Sri Lanka",
@@ -197,9 +197,9 @@ test("conflicting fresh mappings fall through to Google instead of choosing a ve
 test("a cache hit still records a different extracted name that produces the same Google query", async () => {
     const db = setup();
     const service = db.load();
-    await service.resolveLocation({ venueName: "Back Room, Main Street" }, group);
+    await service.resolveLocation({ modes: ["at_provider"], venueName: "Back Room, Main Street" }, group);
     assert.ok(!db.aliases.some(a => a.alias === "Back Room"));
-    await service.resolveLocation({ venueName: "Back Room", address: "Main Street" }, group);
+    await service.resolveLocation({ modes: ["at_provider"], venueName: "Back Room", address: "Main Street" }, group);
     assert.equal(db.requests.length, 1);
     assert.ok(db.aliases.some(a => a.alias === "Back Room" && a.source === "GOOGLE_PLACE"));
 });
@@ -246,10 +246,10 @@ test("missing location inputs do not generate a query cache entry", async () => 
     assert.equal(db.aliases.length, 0);
 });
 
-for (const mode of ['online', 'at_customer', 'fixed_place', 'hybrid', 'unknown']) {
-    test(`${mode}: no physical details uses group discovery coordinates without Google`, async () => {
+for (const modes of [['online'], ['at_customer'], ['at_provider'], ['unknown']]) {
+    test(`${modes.join('+')}: no physical details uses group discovery coordinates without Google`, async () => {
         const db = setup();
-        const result = await db.load().resolveLocation({ mode, rawLocationText: 'Location details unavailable' }, group);
+        const result = await db.load().resolveLocation({ modes, rawLocationText: 'Location details unavailable' }, group);
         assert.equal(result.source, 'GROUP_FALLBACK');
         assert.equal(result.latitude, group.latitude);
         assert.equal(result.longitude, group.longitude);
@@ -261,7 +261,7 @@ for (const mode of ['online', 'at_customer', 'fixed_place', 'hybrid', 'unknown']
 
 test('online ignores extracted physical details and preserves zero-valued group coordinates', async () => {
     const db = setup();
-    const result = await db.load().resolveLocation({ mode: 'online', venueName: 'Office', address: '12 Road', city: 'Kandy' }, { latitude: 0, longitude: 0 });
+    const result = await db.load().resolveLocation({ modes: ['online'], venueName: 'Office', address: '12 Road', city: 'Kandy' }, { latitude: 0, longitude: 0 });
     assert.equal(result.source, 'GROUP_FALLBACK');
     assert.equal(result.latitude, 0);
     assert.equal(result.longitude, 0);
@@ -273,7 +273,7 @@ test('online ignores extracted physical details and preserves zero-valued group 
 
 test('online without group coordinates stays unlocated', async () => {
     const db = setup();
-    const result = await db.load().resolveLocation({ mode: 'online' }, null);
+    const result = await db.load().resolveLocation({ modes: ['online'] }, null);
     assert.equal(result.source, 'UNKNOWN');
     assert.equal(result.latitude, null);
     assert.equal(result.longitude, null);
@@ -281,9 +281,9 @@ test('online without group coordinates stays unlocated', async () => {
 
 const areaPlace = { ...place, primaryType: 'locality', displayName: { text: 'Kandy' } };
 for (const input of [
-    { mode: 'fixed_place', city: 'Kandy' },
-    { mode: 'fixed_place', adminArea: 'South Sri Lanka', rawLocationText: 'my retreat centre in South Sri Lanka' },
-    { mode: 'at_customer', city: 'Kandy', venueName: 'Provider office', address: '12 Temple Road' },
+    { modes: ['at_provider'], city: 'Kandy' },
+    { modes: ['at_provider'], adminArea: 'South Sri Lanka', rawLocationText: 'my retreat centre in South Sri Lanka' },
+    { modes: ['at_customer'], city: 'Kandy', venueName: 'Provider office', address: '12 Temple Road' },
 ]) {
     test(`area-only resolution never creates a venue: ${JSON.stringify(input)}`, async () => {
         const db = setup();
@@ -302,7 +302,7 @@ for (const input of [
 
 test('an address can resolve without creating a venue or alias', async () => {
     const db = setup();
-    const result = await db.load().resolveLocation({ mode: 'fixed_place', address: '12 Temple Road', city: 'Kandy' }, group);
+    const result = await db.load().resolveLocation({ modes: ['at_provider'], address: '12 Temple Road', city: 'Kandy' }, group);
     assert.equal(result.source, 'GOOGLE_ADDRESS');
     assert.equal(result.venueId, null);
     assert.equal(db.requests[0].payload.textQuery, '12 Temple Road, Kandy');
@@ -321,7 +321,7 @@ test('an area search returning a business does not use that business or unrelate
 test('a venue search returning only an area falls back to stated geography without creating aliases', async () => {
     const db = setup();
     db.setFetch(async () => ({ ok: true, json: async () => ({ places: [areaPlace] }) }));
-    const result = await db.load().resolveLocation({ mode: 'hybrid', venueName: 'Missing studio', city: 'Kandy' }, group);
+    const result = await db.load().resolveLocation({ modes: ['at_provider', 'at_customer'], venueName: 'Missing studio', city: 'Kandy' }, group);
     assert.equal(result.source, 'GOOGLE_AREA');
     assert.equal(result.venueId, null);
     assert.equal(db.requests.length, 2);
@@ -331,9 +331,31 @@ test('a venue search returning only an area falls back to stated geography witho
 
 test('a hybrid offering resolves its explicitly named physical venue', async () => {
     const db = setup();
-    const result = await db.load().resolveLocation({ ...location, mode: 'hybrid' }, group);
+    const result = await db.load().resolveLocation({ ...location, modes: ['at_provider', 'at_customer'] }, group);
     assert.equal(result.source, 'GOOGLE_PLACE');
     assert.ok(result.venueId);
+});
+
+test('a mixed provider and customer service resolves a natural area without a venue', async () => {
+    const db = setup();
+    db.setFetch(async () => ({ ok: true, json: async () => ({ places: [{
+        id: "midigama-beach",
+        primaryType: "beach",
+        displayName: { text: "Midigama Beach" },
+        location: { latitude: 5.97, longitude: 80.37 },
+    }] }) }));
+    const result = await db.load().resolveLocation({
+        modes: ["at_provider", "at_customer"],
+        city: "Midigama",
+        adminArea: "Southern Province",
+        country: "Sri Lanka",
+        venueName: null,
+        rawLocationText: "Midigama (our dedicated space) or on-site at your hotel / villa / retreat centre",
+    }, group);
+    assert.equal(result.source, "GOOGLE_AREA");
+    assert.equal(result.venueId, null);
+    assert.equal(db.requests[0].payload.textQuery, "Midigama, Southern Province, Sri Lanka");
+    assert.equal(db.venues.length, 0);
 });
 
 test('ambiguous aliases fall through to Google rather than selecting the first match', async () => {

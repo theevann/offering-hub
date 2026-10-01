@@ -44,13 +44,19 @@ Each offering must contain:
   - startTimePrecision: "unknown", "wholeDay", or "fixedTime". Use "wholeDay" only when explicitly stated or clearly implied; missing time alone means "unknown".
 - pricingType: "free", "fixed", "donation", "range", or null. Treat a mandatory donation amount as fixed.
 - price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
-- location: object containing mode, venueName, address, city, adminArea, country, rawLocationText.
-  - mode: online (fully remote), fixed_place (participants go to a physical destination, even if unnamed), at_customer (provider visits the customer's location), hybrid (explicit online and in-person options), or unknown. Missing location alone does not imply online. For hybrid offerings, the remaining fields describe the physical option.
-  - venueName: only an explicitly named venue or landmark, such as "Sri Yoga Shala" or "Arambol Beach". Use null for a city, "online", "my studio", "my retreat centre", or "your home".
+- location: object containing modes, venueName, address, city, adminArea, country, rawLocationText.
+  - modes: array containing one or more of "online", "at_provider", "at_customer", or "unknown".
+    - online: participants take part remotely.
+    - at_provider: participants go to a physical place chosen by the provider.
+    - at_customer: the provider goes to a place chosen by the customer, such as their home or hotel.
+    - unknown: use only when the message does not establish how or where the offering happens.
+    Include every applicable mode. Do not infer unsupported modes.
+  - venueName: an explicitly stated, externally identifiable venue, business, landmark, or public destination that a participant could independently search for.
+    Use null for generic, private, owned, or customer-chosen descriptions (e.g. "my dedicated studio", "at your home").
   - address: explicitly stated street/building details or local directions; exclude city, adminArea, and country, which have their own fields.
   - Extract only where this offering happens or its stated service area, not an organiser's background or past venues. Never infer geography from group context or general knowledge. Preserve informal geography as stated, without upgrading it to an official region.
   - rawLocationText: preserve the original location wording, including unnamed destinations or "address after booking". Use null for missing text fields.
-  - Examples: "online from your home" is online; "massage at your home in Weligama" is at_customer with city Weligama and no venueName/address; "my retreat centre in South Sri Lanka" is fixed_place with venueName null and the stated broad geography; "Sri Yoga Shala, Unawatuna" is fixed_place with venueName Sri Yoga Shala and city Unawatuna.
+    - Examples: "online from your home" is ["online"]; "massage at your home or in our own space in Weligama" is ["at_customer", "at_provider"] with city Weligama and no venueName/address; "my retreat centre in South Sri Lanka" is ["at_provider"] with venueName null and the stated broad geography; "Sri Yoga Shala, Unawatuna" is ["at_provider"] with venueName Sri Yoga Shala and city Unawatuna.
 - resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration/application. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location.
 - Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Direct WhatsApp links become WhatsApp numbers; preserve WhatsApp group invite URLs. Telegram usernames become https://t.me/username. Never assume a phone number supports WhatsApp. Merge equivalent destinations and combine purposes, but retain phone and WhatsApp as separate channels. Never invent missing destinations: preserve instructions such as "DM me to book" in description when no destination is provided.
 

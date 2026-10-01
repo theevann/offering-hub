@@ -179,7 +179,7 @@ function buildOfferingData(parsed, rawMessage, location, now = new Date()) {
         resources: parsed.resources,
 
         locationSource: location.source,
-        locationMode: parsed.location?.mode ?? 'unknown',
+        locationModes: parsed.location?.modes ?? ['unknown'],
         locationText: parsed.location?.rawLocationText ?? null,
         latitude: location.latitude,
         longitude: location.longitude,

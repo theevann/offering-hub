@@ -321,6 +321,7 @@ function isAreaResult(place) {
         "country", "administrative_area_level_1", "administrative_area_level_2",
         "administrative_area_level_3", "locality", "postal_town", "sublocality",
         "sublocality_level_1", "neighborhood", "postal_code", "political",
+        "beach",
     ];
     const types = place.primaryType ? [place.primaryType] : (place.types || []);
     return types.some(type => areaTypes.includes(type));
@@ -372,12 +373,12 @@ async function resolveAddressOrArea(location, group) {
 async function resolveLocation(parsedLocation, group) {
     const location = normalizeOfferingLocation(parsedLocation);
 
-    // Online offerings belong in local discovery, but have no physical venue.
-    if (location.mode === "online") return groupFallback(group);
+    // Online-only offerings belong in local discovery, but have no physical venue.
+    if (location.modes.length === 1 && location.modes[0] === "online") return groupFallback(group);
 
     // Home visits resolve the service area only, even if extraction accidentally
     // includes the provider's own venue or address.
-    const physicalLocation = location.mode === "at_customer"
+    const physicalLocation = !location.modes.includes("at_provider")
         ? { ...location, venueName: null, address: null }
         : location;
 

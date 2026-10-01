@@ -61,9 +61,8 @@ enum LocationSource {
 
 enum LocationMode {
   online
-  fixed_place
+  at_provider
   at_customer
-  hybrid
   unknown
 }
 
@@ -219,7 +218,7 @@ model Offering {
   price       Json? // Flexible pricing info (e.g. { "amount": 10, "currency": "USD" })
 
   locationSource LocationSource
-  locationMode   LocationMode @default(unknown)
+  locationModes   LocationMode[]
   locationText   String? // Freeform extracted location text (e.g. "Arambol beach")
   latitude       Float? // Geocoded latitude
   longitude      Float? // Geocoded longitude
