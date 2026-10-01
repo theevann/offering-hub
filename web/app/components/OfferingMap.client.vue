@@ -56,9 +56,13 @@ function createPreview(offering) {
     venue.textContent = offeringVenueLabel(offering)
     if (offering.distanceKm != null) venue.textContent += ` · ${Number(offering.distanceKm).toFixed(1)} km`
     if (offeringLocationNote(offering)) venue.textContent += ` · ${offeringLocationNote(offering)}`
-    const price = document.createElement('p')
-    price.textContent = offeringPriceLabel(offering)
-    preview.append(venue, price)
+    preview.append(venue)
+    const priceLabel = offeringPriceLabel(offering, { showUnknown: false })
+    if (priceLabel) {
+        const price = document.createElement('p')
+        price.textContent = priceLabel
+        preview.append(price)
+    }
     return preview
 }
 

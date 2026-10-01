@@ -22,8 +22,9 @@ test('date dots respect local midnight and exclusive event endings', () => {
     })
 })
 
-test('missing prices are explicit and zero amounts remain visible', () => {
+test('missing prices stay explicit by default but can be hidden in explore cards', () => {
     assert.equal(offeringPriceLabel({}), 'Price not specified')
+    assert.equal(offeringPriceLabel({}, { showUnknown: false }), '')
     assert.equal(offeringPriceLabel({ pricingType: 'free' }), 'Free')
     assert.equal(offeringPriceLabel({ price: { amount: 0, currency: 'LKR' } }), '0 LKR')
 })

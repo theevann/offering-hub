@@ -9,7 +9,7 @@ const props = defineProps({
 })
 const timeLabel = computed(() => offeringTimeLabel(props.offering, props.timeZone, props.selectedDate))
 const dateRange = computed(() => offeringDateRange(props.offering, props.timeZone))
-const priceLabel = computed(() => offeringPriceLabel(props.offering))
+const priceLabel = computed(() => offeringPriceLabel(props.offering, { showUnknown: false }))
 const summary = computed(() => props.offering.summary || props.offering.description)
 </script>
 
@@ -28,7 +28,7 @@ const summary = computed(() => props.offering.summary || props.offering.descript
                 </span>
                 <!-- <span v-if="offeringLocationNote(offering)" class="location-note">{{ offeringLocationNote(offering) }}</span> -->
             </div>
-            <span class="price" :class="{ unspecified: priceLabel === 'Price not specified' }">{{ priceLabel }}</span>
+            <span v-if="priceLabel" class="price">{{ priceLabel }}</span>
             <!-- <span class="category">{{ offering.category?.toLowerCase().replaceAll('_', ' ') }}</span> -->
         </div>
     </NuxtLink>

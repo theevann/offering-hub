@@ -23,7 +23,7 @@ export function offeringDateRange(offering, timeZone) {
     return endDay > startDay ? `${formatDay(startDay)} – ${formatDay(endDay)}` : ''
 }
 
-export function offeringPriceLabel({ pricingType, price }) {
+export function offeringPriceLabel({ pricingType, price }, { showUnknown = true } = {}) {
     if (pricingType === 'free') return 'Free'
     if (pricingType === 'donation') return 'Donation'
     if (typeof price === 'string' && price.trim()) return price
@@ -31,7 +31,7 @@ export function offeringPriceLabel({ pricingType, price }) {
     if (price?.minAmount != null && price?.maxAmount != null) {
         return `${price.minAmount}–${price.maxAmount} ${price.currency || ''}`.trim()
     }
-    return 'Price not specified'
+    return showUnknown ? 'Price not specified' : ''
 }
 
 export function offeringVenueLabel(offering) {
