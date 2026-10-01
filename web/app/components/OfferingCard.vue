@@ -11,6 +11,10 @@ const timeLabel = computed(() => offeringTimeLabel(props.offering, props.timeZon
 const dateRange = computed(() => offeringDateRange(props.offering, props.timeZone))
 const priceLabel = computed(() => offeringPriceLabel(props.offering, { showUnknown: false }))
 const summary = computed(() => props.offering.summary || props.offering.description)
+const isOnlineOnly = computed(() => {
+    const modes = props.offering.locationModes || ['unknown']
+    return modes.length === 1 && modes[0] === 'online'
+})
 </script>
 
 <template>
@@ -24,7 +28,7 @@ const summary = computed(() => props.offering.summary || props.offering.descript
         <div class="metadata">
             <div class="location">
                 <span class="venue">{{ offeringVenueLabel(offering) }}
-                    <span v-if="offering.locationMode !== 'online' && offering.distanceKm != null"> · {{ Number(offering.distanceKm).toFixed(1) }} km</span>
+                    <span v-if="!isOnlineOnly && offering.distanceKm != null"> · {{ Number(offering.distanceKm).toFixed(1) }} km</span>
                 </span>
                 <!-- <span v-if="offeringLocationNote(offering)" class="location-note">{{ offeringLocationNote(offering) }}</span> -->
             </div>

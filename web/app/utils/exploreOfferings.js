@@ -74,7 +74,8 @@ export function groupAgenda(offerings, selectedDate, timeZone) {
 
 export function offeringCoordinates(offering) {
     // Online coordinates scope discovery to a community; they are not a map pin.
-    if (offering.locationMode === 'online') return null
+    const modes = offering?.locationModes || ['unknown']
+    if (modes.length === 1 && modes[0] === 'online') return null
     const lat = offering.latitude ?? offering.location?.coordinates?.[1]
     const lng = offering.longitude ?? offering.location?.coordinates?.[0]
     if (lat == null || lng == null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null

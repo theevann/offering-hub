@@ -36,7 +36,7 @@ test('undated events remain in agenda but cannot be assigned to a map day', () =
     assert.equal(groupAgenda([event('unknown', null)], '2026-09-14', 'UTC')[0].date, 'undated')
 })
 test('text search and topics combine across title, description, and venue', () => {
-    const offerings = [event('yes', null, { description: 'Beginner friendly', venue: { displayName: 'Beach studio' } }), event('no', null)]
+    const offerings = [event('yes', null, { topics: ['yoga'], description: 'Beginner friendly', venue: { displayName: 'Beach studio' } }), event('no', null)]
     assert.deepEqual(filterOfferings(offerings, { ...settings, search: 'beginner beach', topic: 'yoga' }).map(o => o.id), ['yes'])
 })
 test('calendar arithmetic handles month, leap-year and daylight-saving boundaries', () => {

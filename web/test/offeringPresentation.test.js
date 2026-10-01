@@ -34,7 +34,7 @@ import { offeringCoordinates, filterOfferings } from '../app/utils/exploreOfferi
 
 test('online discovery coordinates do not become a venue label, directions or map pin', () => {
     const offering = {
-        id: 'online', category: 'SERVICE', title: 'Online class', locationMode: 'online',
+        id: 'online', category: 'SERVICE', title: 'Online class', locationModes: ['online'],
         locationSource: 'GROUP_FALLBACK', latitude: 6, longitude: 80, distanceKm: 2,
         group: { name: 'Local community' },
         venue: { displayName: 'Stale venue', mapsUrl: 'https://maps.google.com/' },
@@ -48,20 +48,32 @@ test('online discovery coordinates do not become a venue label, directions or ma
     assert.equal(results.length, 1);
 });
 
-test('customer visits have no fixed destination; hybrid offerings retain the physical option', () => {
-    const visit = { locationMode: 'at_customer', locationText: 'At your home in Weligama', latitude: 6, longitude: 80 };
-    assert.equal(offeringVenueLabel(visit), 'At your location');
+test('customer visits have no fixed destination; provider and mixed offerings retain physical option', () => {
+    const visit = { locationModes: ['at_customer'], locationText: 'At your home in Weligama', latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(visit), 'At your place');
     assert.equal(offeringLocationNote(visit), 'At your home in Weligama');
     assert.equal(offeringDirectionsUrl(visit), '');
-    const hybrid = { locationMode: 'hybrid', venue: { displayName: 'Studio' }, latitude: 6, longitude: 80 };
-    assert.equal(offeringVenueLabel(hybrid), 'Studio · Online option');
+
+    const hybrid = { locationModes: ['at_provider', 'online'], venue: { displayName: 'Studio' }, latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(hybrid), 'At Studio or online');
+    assert.equal(offeringLocationNote(hybrid), '');
     assert.deepEqual(offeringCoordinates(hybrid), [6, 80]);
     assert.ok(offeringDirectionsUrl(hybrid));
+
+    const mixed = { locationModes: ['at_provider', 'at_customer'], locationText: 'Midigama (our space) or at your hotel', venue: { displayName: 'Midigama' }, latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(mixed), 'At Midigama or your place');
+    assert.equal(offeringLocationNote(mixed), '');
+    assert.deepEqual(offeringCoordinates(mixed), [6, 80]);
+    assert.ok(offeringDirectionsUrl(mixed));
+
+    const mixedWithoutVenue = { locationModes: ['at_provider', 'at_customer'], locationText: 'Midigama (our space) or at your hotel', latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(mixedWithoutVenue), "At the host's location or your place");
+    assert.equal(offeringLocationNote(mixedWithoutVenue), 'Midigama (our space) or at your hotel');
 });
 
 test('resolved areas are approximate and do not generate destination links', () => {
-    const area = { locationSource: 'GOOGLE_AREA', locationText: 'South Sri Lanka', latitude: 6, longitude: 80 };
-    assert.equal(offeringVenueLabel(area), 'South Sri Lanka');
+    const area = { locationModes: ['at_provider'], locationSource: 'GOOGLE_AREA', locationText: 'South Sri Lanka', latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(area), "At the host's location");
     assert.match(offeringLocationNote(area), /Approximate area/);
     assert.equal(offeringDirectionsUrl(area), '');
     assert.ok(offeringDirectionsUrl({ ...area, locationSource: 'GOOGLE_ADDRESS' }));

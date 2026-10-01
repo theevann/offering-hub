@@ -20,7 +20,9 @@ const dateLabel = computed(() => {
 const resources = computed(() => offeringResources(offering.value?.resources))
 const contactActions = computed(() => resources.value.filter(resource => !resource.purposes.includes('location') && !resource.purposes.includes('payment')))
 const paymentActions = computed(() => resources.value.filter(resource => resource.purposes.includes('payment')))
-const hasPhysicalDestination = computed(() => !['online', 'at_customer'].includes(offering.value?.locationMode))
+const modes = computed(() => offering.value?.locationModes || ['unknown'])
+const hasPhysicalDestination = computed(() => modes.value.includes('at_provider'))
+const isOnlineOnly = computed(() => modes.value.length === 1 && modes.value[0] === 'online')
 const locationActions = computed(() => hasPhysicalDestination.value ? resources.value.filter(resource => resource.purposes.includes('location') && !resource.purposes.includes('payment')) : [])
 const photoDialog = ref(null)
 function closePhotoOnBackdrop(event) {
@@ -37,7 +39,7 @@ const backLink = computed(() => {
     if (lastExploreSearch.value) return lastExploreSearch.value
     const item = offering.value
     if (item?.latitude != null && item?.longitude != null) {
-        return { path: '/explore', query: { lat: item.latitude, lng: item.longitude, name: item.locationMode === 'online' ? (item.group?.name || 'Community area') : (item.locationText || item.venue?.displayName || 'Selected area') } }
+        return { path: '/explore', query: { lat: item.latitude, lng: item.longitude, name: isOnlineOnly.value ? (item.group?.name || 'Community area') : (item.locationText || item.venue?.displayName || 'Selected area') } }
     }
     return '/'
 })
@@ -66,7 +68,7 @@ function updatedLabel(value) {
                 <NuxtLink to="/" class="wordmark" aria-label="COIE home">coie<span>.</span></NuxtLink>
                 <span>Local discoveries. Real connections.</span>
             </header>
-            <NuxtLink :to="backLink" class="back-link" @click="goBack">← {{ lastExploreSearch ? 'Back to results' : offering?.locationMode === 'online' ? 'Explore this community’s area' : 'Explore nearby' }}</NuxtLink>
+            <NuxtLink :to="backLink" class="back-link" @click="goBack">← {{ lastExploreSearch ? 'Back to results' : isOnlineOnly ? 'Explore this community’s area' : 'Explore nearby' }}</NuxtLink>
 
             <section v-if="status === 'pending'" class="state" role="status">Loading offering…</section>
             <section v-else-if="error || !offering" class="state" role="alert">

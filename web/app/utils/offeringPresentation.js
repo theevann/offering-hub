@@ -13,7 +13,7 @@ export function offeringTimeLabel(offering, timeZone, selectedDate = '') {
     const end = offering.endTime && new Intl.DateTimeFormat('en-GB', {
         timeZone, hour: '2-digit', minute: '2-digit',
     }).format(new Date(offering.endTime))
-    return end ? `${start} – ${end}` : start;
+    return end ? `${start} – ${end}` : start
 }
 
 export function offeringDateRange(offering, timeZone) {
@@ -35,28 +35,73 @@ export function offeringPriceLabel({ pricingType, price }, { showUnknown = true 
 }
 
 export function offeringVenueLabel(offering) {
-    if (offering.locationMode === 'online') return 'Online'
-    if (offering.locationMode === 'at_customer') return 'At your location'
-    let place = offering.venue?.displayName || offering.locationText;
-    place = place?.split(" – ")[0].split(" | ")[0].trim() || ''
-    if (offering.locationMode === 'hybrid') return place ? `${place} · Online option` : 'Online and in person'
-    return place || 'Location to be confirmed'
+    const modes = Array.isArray(offering?.locationModes)
+        ? offering.locationModes
+        : ['unknown']
+
+    const place = offering?.venue?.displayName
+        ?.split(' – ')[0]
+        .split(' - ')[0]
+        .split(' | ')[0]
+        .trim()
+
+    const options = []
+
+    if (modes.includes('at_provider')) {
+        options.push(place || "the host's location")
+    }
+    if (modes.includes('at_customer')) {
+        options.push('your place')
+    }
+    if (modes.includes('online')) {
+        options.push('online')
+    }
+
+    if (options.length === 0) return 'Location to be confirmed'
+    if (options.length === 1) {
+        return options[0] === 'online' ? 'Online' : `At ${options[0]}`
+    }
+    if (options.length === 2) {
+        return `At ${options[0]} or ${options[1]}`
+    }
+
+    return `At ${options[0]}, ${options[1]}, or ${options[2]}`
 }
 
 export function offeringLocationNote(offering) {
-    if (offering.locationMode === 'online') {
-        return offering.group?.name ? `Shared in ${offering.group.name}` : ''
+    const modes = Array.isArray(offering?.locationModes)
+        ? offering.locationModes
+        : ['unknown']
+
+    const isOnlineOnly = modes.length === 1 && modes[0] === 'online'
+    if (isOnlineOnly) {
+        return offering?.group?.name
+            ? `Shared in ${offering.group.name}`
+            : ''
     }
-    if (offering.locationMode === 'at_customer') {
-        return offering.locationText || 'Confirm the area.'
+
+    const approximateArea = offering?.locationSource === 'GOOGLE_AREA'
+        ? 'Approximate area.'
+        : offering?.locationSource === 'GROUP_FALLBACK'
+            ? 'Approximate area based on this community.'
+            : ''
+
+    // If an identifiable venue is already present, no secondary location note is needed
+    if (offering?.venue) {
+        return approximateArea
     }
-    if (offering.locationSource === 'GOOGLE_AREA') return 'Approximate area. Confirm the exact location.'
-    if (offering.locationSource === 'GROUP_FALLBACK') return 'Approximate area derived from the community. Confirm the exact location.'
-    return ''
+
+    const locationText = offering?.locationText?.trim()
+    if (locationText) {
+        return locationText
+    }
+    return approximateArea
 }
 
 export function offeringDirectionsUrl(offering) {
-    if (!offering || ['online', 'at_customer'].includes(offering.locationMode)) return ''
+    if (!offering) return ''
+    const modes = offering?.locationModes || ['unknown']
+    if (!modes.includes('at_provider')) return ''
     const resource = offering.resources?.find(item => item.channel === 'url' && item.purposes?.includes('location') && !item.purposes.includes('payment') && webUrl(item.value))
     const supplied = webUrl(offering.venue?.mapsUrl) || webUrl(resource?.value)
     if (supplied) return supplied
