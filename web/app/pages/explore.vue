@@ -202,7 +202,7 @@ const resultsTitle = computed(() => {
             <NuxtLink to="/" class="wordmark" aria-label="COIE home">coie<span>.</span></NuxtLink>
             <LocationSearch :name="locationName" v-model:radius-km="radiusKm" @select="selectSearchLocation" />
             <div class="radius-selector" role="group" aria-label="Search radius">
-                <button v-for="radius in [5, 10, 20, 50]" :key="radius" type="button"
+                <button v-for="radius in [5, 15, 50]" :key="radius" type="button"
                     :aria-pressed="radiusKm === radius" @click="radiusKm = radius">{{ radius }} km</button>
             </div>
         </header>

@@ -25,7 +25,7 @@ Splitting and recurrence rules:
 - Group occurrences into ONE offering when they differ only in dates or times. If title, activity, location, pricing, or other offering-level details differ, keep them separate.
 - Every occurrence MUST have its own object in dates. NEVER represent a recurring schedule as one continuous date range.
 - With explicit date bounds, expand every matching occurrence within those bounds, inclusive.
-- Without explicit date bounds, expand recurrence over the 7 calendar dates from the message date through message date + 6 days, inclusive. Use this same window for "this week" unless explicit dates specify otherwise.
+- Without explicit date bounds, expand recurrence over the 7 calendar days from the message date through message date + 6 days, inclusive. Use this same window for "this week" unless explicit dates specify otherwise.
 - Example: "Yoga daily: Vinyasa at 9am and Slow Flow at 5pm", timestamp 2026-09-20, produces 2 offerings, each with 7 dates entries covering September 20–26. Each entry has dateStart = dateEnd = its session date.
 - Keep a single multi-day retreat or one event's internal agenda together, using one dates entry covering the event.
 - Merge duplicate descriptions and occurrences across text and images.
@@ -37,7 +37,7 @@ Each offering must contain:
 - topics: array of 0–5 reusable labels for the main activities, subjects, services, or items offered. Use lowercase English, preferably 1–3 words; translate terms and normalize synonyms to common names. Include a useful broader activity for specialized topics (e.g. "vinyasa yoga" → ["yoga", "vinyasa yoga"]). Include only topics supported by this offering, not incidental mentions. Exclude locations, dates, audiences, promotional wording, and format labels such as class, retreat, service, sale, or rental. Avoid vague labels ("wellness", "experience") and near-duplicate synonyms. Return [] if none.
 - title: concise, max 100 characters.
 - summary: one factual sentence, ideally 10–20 words, highlighting this offering's distinguishing features; omit logistics shown separately.
-- description: concise explanation of this offering only. Preserve useful specifics, requirements, inclusions, and conditions; remove repetition, promotional filler, and WhatsApp artifacts. Use short paragraphs or plain-text bullets where helpful. Do not embellish.
+- description: concise explanation of this offering only. Preserve useful specifics, requirements, inclusions, and conditions; remove repetition, promotional filler, and WhatsApp artifacts. Use short paragraphs or plain-text bullets where helpful. Do not embellish. Each offering's description should be self-contained; do not rely on other offerings' descriptions.
 - dates: array of occurrence objects, ordered chronologically. Each object contains:
   - dateStart, dateEnd: YYYY-MM-DD or null. Infer relative dates and omitted years from the message timestamp. dateEnd is this occurrence's end date, normally dateStart for a single-day event.
   - startTime, endTime: HH:MM, 24-hour format, or null. Derive end time/date from explicit duration when possible.
@@ -46,7 +46,7 @@ Each offering must contain:
 - price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
 - location: object containing modes, venueName, address, city, adminArea, country, rawLocationText.
   - modes: array containing one or more of "online", "at_provider", "at_customer", or "unknown".
-    - online: participants take part remotely.
+    - online: only if CLEARLY stated that participants can take part remotely.
     - at_provider: participants go to a physical place chosen by the provider.
     - at_customer: the provider goes to a place chosen by the customer, such as their home or hotel.
     - unknown: use only when the message does not establish how or where the offering happens.
@@ -54,13 +54,12 @@ Each offering must contain:
   - venueName: an explicitly stated, externally identifiable venue, business, landmark, or public destination that a participant could independently search for.
     Use null for generic, private, owned, or customer-chosen descriptions (e.g. "my dedicated studio", "at your home").
   - address: explicitly stated street/building details or local directions; exclude city, adminArea, and country, which have their own fields.
-  - Extract only where this offering happens or its stated service area, not an organiser's background or past venues. Never infer geography from group context or general knowledge. Preserve informal geography as stated, without upgrading it to an official region.
+  - Extract only where this offering happens or its stated service area, not an organiser's background or past venues. 
   - rawLocationText: preserve the original location wording, including unnamed destinations or "address after booking". Use null for missing text fields.
     - Examples: "online from your home" is ["online"]; "massage at your home or in our own space in Weligama" is ["at_customer", "at_provider"] with city Weligama and no venueName/address; "my retreat centre in South Sri Lanka" is ["at_provider"] with venueName null and the stated broad geography; "Sri Yoga Shala, Unawatuna" is ["at_provider"] with venueName Sri Yoga Shala and city Unawatuna.
-- resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration/application. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location.
-- Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Direct WhatsApp links become WhatsApp numbers; preserve WhatsApp group invite URLs. Telegram usernames become https://t.me/username. Never assume a phone number supports WhatsApp. Merge equivalent destinations and combine purposes, but retain phone and WhatsApp as separate channels. Never invent missing destinations: preserve instructions such as "DM me to book" in description when no destination is provided.
+- resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location. Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Direct WhatsApp links become WhatsApp numbers; preserve WhatsApp group invite URLs. Telegram usernames become https://t.me/username. Never assume a phone number supports WhatsApp. Merge equivalent destinations and combine purposes, but retain phone and WhatsApp as separate channels. Never invent missing destinations: preserve instructions such as "DM me to book" in description when no destination is provided. Format instagram handles as https://instagram.com/username. 
 
-Use null for missing values and [] for missing resources. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
+Use null for missing values and [] for missing resources. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes. Fix obvious typos.
 
 parsingStatus:
 - PARSED_OK: all offerings and occurrences extracted with their key details.
