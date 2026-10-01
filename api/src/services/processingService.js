@@ -48,7 +48,7 @@ async function processRawMessage(rawMessage) {
 
     // Sequential creation
     const offerings = [];
-    const parsedLength = parsedOfferings.reduce((acc, parsed) => acc + (parsed.dates?.length || 0), 0);
+    const parsedLength = parsedOfferings.reduce((acc, parsed) => acc + (parsed.dates?.length || 1), 0);
 
     for (const parsed of parsedOfferings) {
         const createdOfferings = await createOfferingFromParsed(parsed, rawMessage);
@@ -87,14 +87,16 @@ function convertToDatetime(date, time, timezone, allowEmptyTime = false) {
 
 async function createOfferingFromParsed(parsed, rawMessage) {
     const offerings = [];
-    const dates = parsed.dates;
-    parsed.dates = undefined;
+    const { dates, ...parsedWithoutDates } = parsed;
 
     const locationInfo = await resolveLocation(parsed.location, rawMessage.group);
     log.debug(`Resolved location for message ${rawMessage.id}:`, locationInfo);
-    
-    for (const date of dates) {
-        const offering = await createOffering({ ...parsed, ...date }, locationInfo, rawMessage, rawMessage.group);
+
+    const occurrences = Array.isArray(dates) && dates.length > 0 ? dates : [null];
+
+    for (const date of occurrences) {
+        const payload = date ? { ...parsedWithoutDates, ...date } : parsedWithoutDates;
+        const offering = await createOffering(payload, locationInfo, rawMessage, rawMessage.group);
         if (offering) {
             offerings.push(offering);
         }
