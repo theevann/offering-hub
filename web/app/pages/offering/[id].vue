@@ -1,7 +1,7 @@
 <script setup>
 import { dateKey, formatDay } from '~/utils/exploreOfferings'
-import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel } from '~/utils/offeringPresentation'
-import { webUrl, offeringResources, offeringPhotoUrl } from '~/utils/offeringLinks'
+import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel, offeringLocationNote, offeringDirectionsUrl } from '~/utils/offeringPresentation'
+import { offeringResources, offeringPhotoUrl } from '~/utils/offeringLinks'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,7 +20,8 @@ const dateLabel = computed(() => {
 const resources = computed(() => offeringResources(offering.value?.resources))
 const contactActions = computed(() => resources.value.filter(resource => !resource.purposes.includes('location') && !resource.purposes.includes('payment')))
 const paymentActions = computed(() => resources.value.filter(resource => resource.purposes.includes('payment')))
-const locationActions = computed(() => resources.value.filter(resource => resource.purposes.includes('location') && !resource.purposes.includes('payment')))
+const hasPhysicalDestination = computed(() => !['online', 'at_customer'].includes(offering.value?.locationMode))
+const locationActions = computed(() => hasPhysicalDestination.value ? resources.value.filter(resource => resource.purposes.includes('location') && !resource.purposes.includes('payment')) : [])
 const photoDialog = ref(null)
 function closePhotoOnBackdrop(event) {
     if (event.target === photoDialog.value) photoDialog.value.close()
@@ -31,22 +32,12 @@ const photo = computed(function () {
     return (offering.value?.media || [])
         .find(media => media.type?.toLowerCase() === 'image' && offeringPhotoUrl(media.url))
 })
-const directionsUrl = computed(() => {
-    if (!offering.value) return ''
-    const venue = offering.value.venue
-    const supplied = webUrl(venue?.mapsUrl) || locationActions.value.find(resource => resource.href)?.href
-    if (supplied) return supplied
-    if (offering.value.locationSource === 'GROUP_FALLBACK') return ''
-    const lat = offering.value.latitude ?? venue?.latitude
-    const lng = offering.value.longitude ?? venue?.longitude
-    if (lat == null || lng == null) return ''
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`
-})
+const directionsUrl = computed(() => offeringDirectionsUrl(offering.value))
 const backLink = computed(() => {
     if (lastExploreSearch.value) return lastExploreSearch.value
     const item = offering.value
     if (item?.latitude != null && item?.longitude != null) {
-        return { path: '/explore', query: { lat: item.latitude, lng: item.longitude, name: item.locationText || item.venue?.displayName || 'Selected area' } }
+        return { path: '/explore', query: { lat: item.latitude, lng: item.longitude, name: item.locationMode === 'online' ? (item.group?.name || 'Community area') : (item.locationText || item.venue?.displayName || 'Selected area') } }
     }
     return '/'
 })
@@ -75,7 +66,7 @@ function updatedLabel(value) {
                 <NuxtLink to="/" class="wordmark" aria-label="COIE home">coie<span>.</span></NuxtLink>
                 <span>Local discoveries. Real connections.</span>
             </header>
-            <NuxtLink :to="backLink" class="back-link" @click="goBack">← {{ lastExploreSearch ? 'Back to results' : 'Explore nearby' }}</NuxtLink>
+            <NuxtLink :to="backLink" class="back-link" @click="goBack">← {{ lastExploreSearch ? 'Back to results' : offering?.locationMode === 'online' ? 'Explore this community’s area' : 'Explore nearby' }}</NuxtLink>
 
             <section v-if="status === 'pending'" class="state" role="status">Loading offering…</section>
             <section v-else-if="error || !offering" class="state" role="alert">
@@ -87,13 +78,14 @@ function updatedLabel(value) {
                 <header class="offering-heading">
                     <div class="tags"><span class="category">{{ categoryLabel }}</span><span v-for="topic in offering.topics" :key="topic">{{ topic }}</span></div>
                     <h1>{{ offering.title }}</h1>
-                    <a v-if="offering.venue" class="venue-line" :href="directionsUrl" target="_blank" rel="noopener noreferrer">
+                    <a v-if="hasPhysicalDestination && offering.venue && directionsUrl" class="venue-line" :href="directionsUrl" target="_blank" rel="noopener noreferrer">
                         <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
                             aria-hidden="true">
                             <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
                             <circle cx="12" cy="10" r="2.5" />
-                        </svg> {{ offering.venue.displayName }}
+                        </svg> {{ offeringVenueLabel(offering) }}
                     </a>
+                    <p v-else class="venue-line">{{ offeringVenueLabel(offering) }}</p>
                 </header>
                 <div class="detail-layout" :class="{ 'with-photo': photo && !photoFailed }">
                     <button v-if="photo && !photoFailed" class="photo-preview" type="button"
@@ -115,7 +107,7 @@ function updatedLabel(value) {
                                 <a v-if="directionsUrl && !offering.venue?.address" :href="directionsUrl" target="_blank" rel="noopener noreferrer">{{ offeringVenueLabel(offering) }}</a>
                                 <template v-else>{{ offeringVenueLabel(offering) }}</template>
                             </p>
-                            <p v-if="offering.venue?.address">
+                            <p v-if="hasPhysicalDestination && offering.venue?.address">
                                 <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener noreferrer">{{ offering.venue.address }}</a>
                                 <template v-else>{{ offering.venue.address }}</template>
                             </p>
@@ -123,7 +115,7 @@ function updatedLabel(value) {
                                 <a v-if="resource.href" :href="resource.href" target="_blank" rel="noopener noreferrer">Get directions</a>
                                 <span v-else>{{ resource.value }}</span>
                             </p>
-                            <p v-if="offering.locationSource === 'GROUP_FALLBACK'" class="muted">Approximate area from the community. Confirm the exact location with the organiser.</p>
+                            <p v-if="offeringLocationNote(offering)" class="muted">{{ offeringLocationNote(offering) }}</p>
                         </section>
                         <section><h2>Price</h2><p class="detail-value">{{ offeringPriceLabel(offering) }}</p></section>
                         </div>

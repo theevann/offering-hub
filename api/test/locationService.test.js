@@ -1,4 +1,3 @@
-// TODO: Review this file
 const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { createHash } = require("node:crypto");
@@ -11,9 +10,9 @@ const group = {
     type: "REGION", country: "Sri Lanka", adminArea: "Southern Province",
     latitude: 5.96, longitude: 80.39, radiusKm: 50,
 };
-const location = { locationName: "Mountain Studio" };
+const location = { venueName: "Mountain Studio" };
 const place = {
-    id: "place-1", displayName: { text: "Mountain Studio" },
+    id: "place-1", types: ["establishment"], displayName: { text: "Mountain Studio" },
     formattedAddress: "Kandy, Sri Lanka",
     location: { latitude: 7.29, longitude: 80.63 },
     addressComponents: [
@@ -77,6 +76,7 @@ function setup() {
                 if (name === "../db/prismaClient") return prisma;
                 if (name === "@prisma/client") return { Prisma };
                 if (name === "node:crypto") return require(name);
+                if (name === "../utils/offeringLocation") return require("../src/utils/offeringLocation");
                 if (name === "../utils/logger") return {
                     createLogger: () => ({ debug() {}, info() {}, warn() {} }),
                 };
@@ -105,7 +105,7 @@ test("20 out-of-area resolutions share one persisted Google query, including aft
     for (let i = 1; i < 20; i++) {
         const result = await db.load().resolveLocation(location, group);
         assert.equal(result.venueId, first.venueId);
-        assert.equal(result.source, "ALIAS_MATCH");
+        assert.equal(result.source, "GOOGLE_QUERY_CACHE");
         assert.equal(result.latitude, place.location.latitude);
     }
     assert.equal(db.requests.length, 1);
@@ -114,7 +114,7 @@ test("20 out-of-area resolutions share one persisted Google query, including aft
     const cached = db.queries()[0];
     assert.equal(cached.alias, "Mountain Studio, Southern Province, Sri Lanka");
     assert.equal(cached.normalizedAlias,
-        `gplaces:v1:${createHash("sha256").update(db.requests[0].body).digest("hex")}`);
+        `gplaces:v2:${createHash("sha256").update(db.requests[0].body).digest("hex")}`);
     assert.ok(!("queryHash" in cached));
     assert.ok(db.cacheReads.every(where => where.source === "GOOGLE_QUERY_CACHE" && !("venueId" in where)));
 });
@@ -128,7 +128,7 @@ test("query text, coordinates and radius distinguish requests; unrelated group m
     await resolveLocation(location, { ...group, latitude: 6 });
     await resolveLocation(location, { ...group, longitude: 81 });
     await resolveLocation(location, { ...group, radiusKm: 10 });
-    await resolveLocation({ ...location, addressFragment: "Main Street" }, group);
+    await resolveLocation({ ...location, address: "Main Street" }, group);
     await resolveLocation({ ...location, city: "Kandy" }, group);
     assert.equal(db.requests.length, 6);
     assert.equal(new Set(db.queries().map(q => q.normalizedAlias)).size, 6);
@@ -197,18 +197,18 @@ test("conflicting fresh mappings fall through to Google instead of choosing a ve
 test("a cache hit still records a different extracted name that produces the same Google query", async () => {
     const db = setup();
     const service = db.load();
-    await service.resolveLocation({ locationName: "Back Room, Main Street" }, group);
+    await service.resolveLocation({ venueName: "Back Room, Main Street" }, group);
     assert.ok(!db.aliases.some(a => a.alias === "Back Room"));
-    await service.resolveLocation({ locationName: "Back Room", addressFragment: "Main Street" }, group);
+    await service.resolveLocation({ venueName: "Back Room", address: "Main Street" }, group);
     assert.equal(db.requests.length, 1);
     assert.ok(db.aliases.some(a => a.alias === "Back Room" && a.source === "GOOGLE_PLACE"));
 });
 
-test("name alias matches take priority, and both geographic lookups exclude query entries", async () => {
+test("name alias matches take priority; explicit geography uses only its own scope", async () => {
     const db = setup();
     const service = db.load();
     await service.resolveLocation({ ...location, country: "Sri Lanka" }, group);
-    assert.equal(db.aliasQueries.length, 2);
+    assert.equal(db.aliasQueries.length, 1);
     assert.ok(db.aliasQueries.every(q => q.text.includes("a.source <> 'GOOGLE_QUERY_CACHE'")));
     db.setNameMatches([{ venueId: "manual-venue", venue: { latitude: 1, longitude: 2 } }]);
     const result = await service.resolveLocation(location, group);
@@ -244,4 +244,112 @@ test("missing location inputs do not generate a query cache entry", async () => 
     assert.equal(db.cacheReads.length, 0);
     assert.equal(db.requests.length, 0);
     assert.equal(db.aliases.length, 0);
+});
+
+for (const mode of ['online', 'at_customer', 'fixed_place', 'hybrid', 'unknown']) {
+    test(`${mode}: no physical details uses group discovery coordinates without Google`, async () => {
+        const db = setup();
+        const result = await db.load().resolveLocation({ mode, rawLocationText: 'Location details unavailable' }, group);
+        assert.equal(result.source, 'GROUP_FALLBACK');
+        assert.equal(result.latitude, group.latitude);
+        assert.equal(result.longitude, group.longitude);
+        assert.equal(result.venueId, null);
+        assert.equal(db.requests.length, 0);
+        assert.equal(db.aliasQueries.length, 0);
+    });
+}
+
+test('online ignores extracted physical details and preserves zero-valued group coordinates', async () => {
+    const db = setup();
+    const result = await db.load().resolveLocation({ mode: 'online', venueName: 'Office', address: '12 Road', city: 'Kandy' }, { latitude: 0, longitude: 0 });
+    assert.equal(result.source, 'GROUP_FALLBACK');
+    assert.equal(result.latitude, 0);
+    assert.equal(result.longitude, 0);
+    assert.equal(result.venueId, null);
+    assert.equal(db.requests.length, 0);
+    assert.equal(db.cacheReads.length, 0);
+    assert.equal(db.aliasQueries.length, 0);
+});
+
+test('online without group coordinates stays unlocated', async () => {
+    const db = setup();
+    const result = await db.load().resolveLocation({ mode: 'online' }, null);
+    assert.equal(result.source, 'UNKNOWN');
+    assert.equal(result.latitude, null);
+    assert.equal(result.longitude, null);
+});
+
+const areaPlace = { ...place, primaryType: 'locality', displayName: { text: 'Kandy' } };
+for (const input of [
+    { mode: 'fixed_place', city: 'Kandy' },
+    { mode: 'fixed_place', adminArea: 'South Sri Lanka', rawLocationText: 'my retreat centre in South Sri Lanka' },
+    { mode: 'at_customer', city: 'Kandy', venueName: 'Provider office', address: '12 Temple Road' },
+]) {
+    test(`area-only resolution never creates a venue: ${JSON.stringify(input)}`, async () => {
+        const db = setup();
+        db.setFetch(async () => ({ ok: true, json: async () => ({ places: [areaPlace] }) }));
+        const result = await db.load().resolveLocation(input, group);
+        assert.equal(result.source, 'GOOGLE_AREA');
+        assert.equal(result.venueId, null);
+        assert.equal(db.requests[0].payload.textQuery, input.city || input.adminArea);
+        assert.equal(db.requests[0].payload.locationBias, undefined);
+        assert.equal(db.venues.length, 0);
+        assert.equal(db.aliases.length, 0);
+        assert.equal(db.cacheReads.length, 0);
+        assert.equal(db.aliasQueries.length, 0);
+    });
+}
+
+test('an address can resolve without creating a venue or alias', async () => {
+    const db = setup();
+    const result = await db.load().resolveLocation({ mode: 'fixed_place', address: '12 Temple Road', city: 'Kandy' }, group);
+    assert.equal(result.source, 'GOOGLE_ADDRESS');
+    assert.equal(result.venueId, null);
+    assert.equal(db.requests[0].payload.textQuery, '12 Temple Road, Kandy');
+    assert.equal(db.venues.length, 0);
+    assert.equal(db.cacheReads.length, 0);
+});
+
+test('an area search returning a business does not use that business or unrelated group coordinates', async () => {
+    const db = setup();
+    const result = await db.load().resolveLocation({ city: 'Kandy' }, group);
+    assert.equal(result.source, 'UNKNOWN');
+    assert.equal(result.latitude, null);
+    assert.equal(db.venues.length, 0);
+});
+
+test('a venue search returning only an area falls back to stated geography without creating aliases', async () => {
+    const db = setup();
+    db.setFetch(async () => ({ ok: true, json: async () => ({ places: [areaPlace] }) }));
+    const result = await db.load().resolveLocation({ mode: 'hybrid', venueName: 'Missing studio', city: 'Kandy' }, group);
+    assert.equal(result.source, 'GOOGLE_AREA');
+    assert.equal(result.venueId, null);
+    assert.equal(db.requests.length, 2);
+    assert.equal(db.requests[1].payload.textQuery, 'Kandy');
+    assert.equal(db.aliases.length, 0);
+});
+
+test('a hybrid offering resolves its explicitly named physical venue', async () => {
+    const db = setup();
+    const result = await db.load().resolveLocation({ ...location, mode: 'hybrid' }, group);
+    assert.equal(result.source, 'GOOGLE_PLACE');
+    assert.ok(result.venueId);
+});
+
+test('ambiguous aliases fall through to Google rather than selecting the first match', async () => {
+    const db = setup();
+    db.setNameMatches([{ venueId: 'one' }, { venueId: 'two' }]);
+    const result = await db.load().resolveLocation(location, group);
+    assert.equal(result.source, 'GOOGLE_PLACE');
+    assert.equal(db.requests.length, 1);
+});
+
+test('failed explicit geography is not replaced with group geography', async () => {
+    const db = setup();
+    db.setFetch(async () => ({ ok: true, json: async () => ({ places: [] }) }));
+    const result = await db.load().resolveLocation({ ...location, city: 'Kandy' }, group);
+    assert.equal(result.source, 'UNKNOWN');
+    assert.equal(result.latitude, null);
+    assert.equal(db.aliasQueries.length, 1);
+    assert.ok(db.requests.every(request => !request.payload.textQuery.includes('Southern Province') && !request.payload.locationBias));
 });

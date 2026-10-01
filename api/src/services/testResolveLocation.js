@@ -6,12 +6,12 @@ const { resolveLocation, normalizeLocation, searchAliases, buildVenueScope } = r
 
 async function run() {
   const parsedLocation = {
-    // locationName: "Unsung",
-    // locationName: "Unsung café",
-    // locationName: "Sênses yoga",
-    locationName: "# yoga shack",
-    // addressFragment: "Weligama"
-    // addressFragment: "Weligama"
+    // venueName: "Unsung",
+    // venueName: "Unsung café",
+    // venueName: "Sênses yoga",
+    venueName: "# yoga shack",
+    // address: "Weligama"
+    // address: "Weligama"
   };
 
   const group = {
@@ -21,7 +21,7 @@ async function run() {
     type: "CITY",
   };
 
-  const normalizedLocationName = normalizeLocation(parsedLocation.locationName);
+  const normalizedLocationName = normalizeLocation(parsedLocation.venueName);
   log.info("Normalized Location Name:", normalizedLocationName);
 
   const scope = buildVenueScope(group);

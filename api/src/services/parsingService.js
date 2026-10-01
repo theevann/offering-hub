@@ -1,4 +1,5 @@
 const { normalizeResources } = require('../utils/offeringResources');
+const { normalizeOfferingLocation } = require('../utils/offeringLocation');
 const { createLogger } = require("../utils/logger");
 const log = createLogger("parsing");
 
@@ -43,8 +44,14 @@ Each offering must contain:
   - startTimePrecision: "unknown", "wholeDay", or "fixedTime". Use "wholeDay" only when explicitly stated or clearly implied; missing time alone means "unknown".
 - pricingType: "free", "fixed", "donation", "range", or null. Treat a mandatory donation amount as fixed.
 - price: null or an object, e.g. {"amount":10,"currency":"USD"}, {"minAmount":5000,"maxAmount":15000,"currency":"LKR"}, or {"options":[{"description":"locals","amount":5,"currency":"EUR"}]}.
-- location: object containing locationName, addressFragment, city, adminArea, country, url, rawLocationText. Fill only explicitly mentioned location details for this offering; never infer geography from group context or general knowledge. addressFragment excludes city, adminArea, and country. rawLocationText preserves the original location wording. Use null for missing fields.
-- resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration/application. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location. Copy a location resource URL into location.url when it identifies this offering's location.
+- location: object containing mode, venueName, address, city, adminArea, country, rawLocationText.
+  - mode: online (fully remote), fixed_place (participants go to a physical destination, even if unnamed), at_customer (provider visits the customer's location), hybrid (explicit online and in-person options), or unknown. Missing location alone does not imply online. For hybrid offerings, the remaining fields describe the physical option.
+  - venueName: only an explicitly named venue or landmark, such as "Sri Yoga Shala" or "Arambol Beach". Use null for a city, "online", "my studio", "my retreat centre", or "your home".
+  - address: explicitly stated street/building details or local directions; exclude city, adminArea, and country, which have their own fields.
+  - Extract only where this offering happens or its stated service area, not an organiser's background or past venues. Never infer geography from group context or general knowledge. Preserve informal geography as stated, without upgrading it to an official region.
+  - rawLocationText: preserve the original location wording, including unnamed destinations or "address after booking". Use null for missing text fields.
+  - Examples: "online from your home" is online; "massage at your home in Weligama" is at_customer with city Weligama and no venueName/address; "my retreat centre in South Sri Lanka" is fixed_place with venueName null and the stated broad geography; "Sri Yoga Shala, Unawatuna" is fixed_place with venueName Sri Yoga Shala and city Unawatuna.
+- resources: array of {"value":"...","channel":"url|email|phone|whatsapp|telegram","purposes":[]} relevant to this offering. Allowed purposes: booking, inquiry, information, social, community, location, payment. Use booking for both reservations and registration/application. Multiple purposes are allowed; assign them only from explicit wording or clear association, never from channel or order alone. Use [] when purpose is unclear. General websites/details use information; Maps/directions use location.
 - Normalize clear email obfuscations (" at ", "[at]", " dot ") to @ and dots. Format phone/WhatsApp numbers as +countrycode followed by digits only when the country is unambiguous; otherwise keep local digits. Direct WhatsApp links become WhatsApp numbers; preserve WhatsApp group invite URLs. Telegram usernames become https://t.me/username. Never assume a phone number supports WhatsApp. Merge equivalent destinations and combine purposes, but retain phone and WhatsApp as separate channels. Never invent missing destinations: preserve instructions such as "DM me to book" in description when no destination is provided.
 
 Use null for missing values and [] for missing resources. Use dates: [] for listings without any stated event or schedule. For an event with an unknown date, include one dates object with the known details and null for missing values. Do not invent occurrences. If the message timestamp is missing, leave dates that depend on it null and explain in parsingNotes.
@@ -162,7 +169,7 @@ async function parse({ rawText, media, timestamp, group }) {
             })),
             pricingType: event.pricingType || null,
             price: event.price || null,
-            location: event.location || null,
+            location: normalizeOfferingLocation(event.location),
             resources: normalizeResources(event.resources),
             latitude: null,
             longitude: null

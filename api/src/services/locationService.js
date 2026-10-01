@@ -4,17 +4,11 @@ const log = createLogger("location");
 const prisma = require("../db/prismaClient");
 const { Prisma } = require("@prisma/client");
 const { createHash } = require("node:crypto");
+const { normalizeOfferingLocation } = require("../utils/offeringLocation");
 
 const GOOGLE_QUERY_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-// This service will contain logic related to resolving and standardizing location information for parsed offerings.
-
-// 0. Normalise: lowercase, trim, remove punctuation
-// 1 A Google Maps URL is present in the message
-// 2 Alias match - Venue name match
-// 3 Google Places text search
-// 4 Google Geocode <- not needed if we can get lat/lng from places search...
-// 5 Group fallback
+// Resolve physical destinations separately from the community area used for discovery.
 
 function normalizeLocation(text) {
     if (!text || typeof text !== "string")
@@ -30,7 +24,7 @@ function normalizeLocation(text) {
 }
 
 function buildVenueScope(group) {
-    switch (group.type) {
+    switch (group?.type) {
         case "PRESENT":
             const conditions = [];
             if (group.country) {
@@ -77,76 +71,32 @@ function buildVenueScope(group) {
 }
 
 async function searchAliases(parsedLocation, group) {
-    const normalizedLocationName = normalizeLocation(parsedLocation?.locationName);
-    if (!normalizedLocationName || !group) return null;
+    const normalizedVenueName = normalizeLocation(parsedLocation?.venueName);
+    if (!normalizedVenueName) return null;
 
-    const scopeParsed = buildVenueScope({
-        type: "PRESENT",
-        country: parsedLocation?.country,
-        adminArea: parsedLocation?.adminArea,
-        city: parsedLocation?.city,
-    });
+    // Explicit geography takes precedence: never retry the same name in another
+    // area's group scope when the message already identifies its geography.
+    const scope = hasExplicitGeography(parsedLocation)
+        ? buildVenueScope({ type: "PRESENT", ...parsedLocation })
+        : buildVenueScope(group);
+    if (!scope) return null;
 
-    if (scopeParsed) {
-        log.debug("Alias search scope for parsed location:", JSON.stringify(scopeParsed?.values, null, 2));
-
-        const exactMatchesFromParsed = await prisma.$queryRaw`
-            SELECT a.*, row_to_json(v) AS venue
-            FROM "VenueAlias" a
-            JOIN "Venue" v ON v.id = a."venueId"
-            WHERE ${scopeParsed}
-            AND a."normalizedAlias" = ${normalizedLocationName}
-            AND a.source <> 'GOOGLE_QUERY_CACHE'
-            ORDER BY a.id
-        `;
-
-        if (exactMatchesFromParsed.length > 0) {
-            if (exactMatchesFromParsed.length > 1) {
-                log.warn(`Multiple exact alias matches found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed.map(a => a.alias));
-            } else {
-                log.debug(`Exact alias match found for ${normalizedLocationName} in parsed location scope:`, exactMatchesFromParsed[0].alias);
-                return exactMatchesFromParsed[0];
-            }
-        }
-    } else {
-        log.debug("No parsed location scope");
-    }
-
-    const scopeGroup = buildVenueScope(group);
-    if (!scopeGroup) return null;
-
-    log.debug("Alias search scope for group location:", JSON.stringify(scopeGroup?.values, null, 2));
-
-    const exactMatchesFromGroup = await prisma.$queryRaw`
+    const matches = await prisma.$queryRaw`
         SELECT a.*, row_to_json(v) AS venue
         FROM "VenueAlias" a
         JOIN "Venue" v ON v.id = a."venueId"
-        WHERE ${scopeGroup}
-          AND a."normalizedAlias" = ${normalizedLocationName}
+        WHERE ${scope}
+          AND a."normalizedAlias" = ${normalizedVenueName}
           AND a.source <> 'GOOGLE_QUERY_CACHE'
         ORDER BY a.id
-        LIMIT 1
+        LIMIT 2
     `;
 
-    return exactMatchesFromGroup[0] ?? null;
-
-    // if (exactMatchesFromGroup.length > 0) {
-    //     return exactMatchesFromGroup[0];
-    // }
-
-    // const fuzzyMatches = await prisma.$queryRaw`
-    //     SELECT a.*, row_to_json(v) AS venue, similarity(a."normalizedAlias", ${normalizedLocationName}) AS "similarityScore"
-    //     FROM "VenueAlias" a
-    //     JOIN "Venue" v ON v.id = a."venueId"
-    //     WHERE ${scopeGroup}
-    //     AND similarity(a."normalizedAlias", ${normalizedLocationName}) > 0.6
-    //     ORDER BY similarity(a."normalizedAlias", ${normalizedLocationName}) DESC
-    //     LIMIT 3;
-    // `;
-
-    // log.info('Fuzzy alias search results for', normalizedLocationName, JSON.stringify(fuzzyMatches, null, 2));
-
-    // return fuzzyMatches[0] ?? null;
+    if (matches.length > 1) {
+        log.warn("Ambiguous venue alias:", parsedLocation.venueName);
+        return null;
+    }
+    return matches[0] ?? null;
 }
 
 async function getVenueFromPlaceId(googlePlaceId) {
@@ -215,16 +165,13 @@ async function addVenueAlias(venueId, aliasText, source, similarityScore = 0) {
 function buildPlacesTextQuery(location, group) {
     if (!location) return null;
 
-    const hasExplicitGeography =
-        location.city || location.adminArea || location.country;
-
-    const geography = hasExplicitGeography
+    const geography = hasExplicitGeography(location)
         ? [location.city, location.adminArea, location.country]
         : [group?.city || group?.adminArea, group?.country];
 
     const parts = [
-        location.locationName,
-        location.addressFragment,
+        location.venueName,
+        location.address,
         ...geography
     ];
 
@@ -235,8 +182,8 @@ function buildPlacesTextQuery(location, group) {
 }
 
 function buildPlacesRequest(parsedLocation, group) {
-    if (!parsedLocation?.locationName && !parsedLocation?.addressFragment && !parsedLocation?.city) {
-        log.info("No location name, address fragment or city provided, skipping Places text search.");
+    if (!parsedLocation?.venueName && !parsedLocation?.address && !hasExplicitGeography(parsedLocation)) {
+        log.info("No venue, address or geography provided; skipping Places text search.");
         return null;
     }
 
@@ -249,7 +196,7 @@ function buildPlacesRequest(parsedLocation, group) {
         textQuery,
     };
 
-    if (Number.isFinite(group?.latitude) && Number.isFinite(group?.longitude)) {
+    if (!hasExplicitGeography(parsedLocation) && Number.isFinite(group?.latitude) && Number.isFinite(group?.longitude)) {
         payload.locationBias = {
             circle: {
                 center: {
@@ -267,7 +214,7 @@ function buildPlacesRequest(parsedLocation, group) {
 function getGoogleQueryHash(payload) {
     // buildPlacesRequest uses a fixed property order. Hash the exact body sent to Google;
     // bump the version if request defaults or resolution semantics change.
-    return `gplaces:v1:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+    return `gplaces:v2:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 }
 
 async function findGoogleQueryVenue(queryHash) {
@@ -329,45 +276,6 @@ async function searchGooglePlacesText(payload) {
         }
 
         const data = await response.json();
-        // const data = {"places": [
-        //     {
-        //     "id": "ChIJgTRUFQAT4ToR1FSjX3mYxXI",
-        //     "formattedAddress": "Midigama, Ahangama 80650, Sri Lanka",
-        //     "location": {
-        //         "latitude": 5.9647799,
-        //         "longitude": 80.3915415
-        //     },
-        //     "googleMapsUri": "https://maps.google.com/?cid=8270183937798788308&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-        //     "displayName": {
-        //         "text": "Unsung",
-        //         "languageCode": "en"
-        //     }
-        //     },
-        //     {
-        //     "id": "ChIJ55hrSXQV4ToR4ka2flVpSrc",
-        //     "formattedAddress": "XCFQ+V73, 34 Weligama By Pass Rd, Weligama 81700, Sri Lanka",
-        //     "location": {
-        //         "latitude": 5.971097299999999,
-        //         "longitude": 80.4268312
-        //     },
-        //     "googleMapsUri": "https://maps.google.com/?cid=13207484673136412386&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
-        //     "displayName": {
-        //         "text": "Weligama Beach",
-        //         "languageCode": "en"
-        //     }
-        //     }
-        // ]};
-
-        // log.info("Google Places text search results for query:", textQuery, JSON.stringify(data, null, 2));
-
-        // log.info("Google Places text search results:", data?.places?.map(place => ({
-        //     id: place.id,
-        //     displayName: place.displayName?.text,
-        //     formattedAddress: place.formattedAddress,
-        //     latitude: place.location?.latitude,
-        //     longitude: place.location?.longitude
-        // })));
-
         const topPlace = data?.places?.[0];
         if (!Number.isFinite(topPlace?.location?.latitude) ||
             !Number.isFinite(topPlace?.location?.longitude)) return null;
@@ -379,99 +287,116 @@ async function searchGooglePlacesText(payload) {
     }
 }
 
-async function resolveLocation(parsedLocation, group) {
-    parsedLocation = parsedLocation || {};
+function hasExplicitGeography(location) {
+    return Boolean(location?.city || location?.adminArea || location?.country);
+}
 
-    const location = {
-        source: "UNKNOWN",
-        longitude: null,
-        latitude: null,
+function unknownLocation() {
+    return { source: "UNKNOWN", latitude: null, longitude: null, venueId: null };
+}
+
+function groupFallback(group) {
+    if (!Number.isFinite(group?.latitude) || !Number.isFinite(group?.longitude)) {
+        return unknownLocation();
+    }
+    return {
+        source: "GROUP_FALLBACK",
+        latitude: group.latitude,
+        longitude: group.longitude,
         venueId: null,
     };
+}
 
-    // if not locationName or addressFragment is present, return null
-    // if (!parsedLocation?.locationName?.trim() && !parsedLocation?.addressFragment?.trim()) {
-    //     return location;
-    // }
+function locationFromVenue(venue, source) {
+    return {
+        source,
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        venueId: venue.id,
+    };
+}
 
-    const normalizedLocationName = normalizeLocation(parsedLocation.locationName);
+function isAreaResult(place) {
+    const areaTypes = [
+        "country", "administrative_area_level_1", "administrative_area_level_2",
+        "administrative_area_level_3", "locality", "postal_town", "sublocality",
+        "sublocality_level_1", "neighborhood", "postal_code", "political",
+    ];
+    const types = place.primaryType ? [place.primaryType] : (place.types || []);
+    return types.some(type => areaTypes.includes(type));
+}
 
-    // 1 - Google maps url (TODO)
-
-
-    // 2 - Alias table search
-    const aliasMatch = await searchAliases(parsedLocation, group);
-
-    if (aliasMatch) {
-        // ### For now, we will not do fuzzy matching and send to gmaps if the alias is not an exact match. ###
-        // Add new alias if the parsed location name is different from the existing normalized alias
-        // if (aliasMatch.normalizedAlias !== normalizedLocationName && aliasMatch.similarityScore > 0.8) {
-        //     await addVenueAlias(aliasMatch.venueId, parsedLocation.locationName, "FUZZY_MATCH", aliasMatch.similarityScore);
-        // }
-        // log.info("Top Alias result:", aliasMatch?.alias, "| Venue:", aliasMatch?.venue?.displayName, "| Similarity Score:", aliasMatch?.similarityScore || 1);
-
-        log.info("Alias result:", aliasMatch?.alias, "| Venue:", aliasMatch?.venue?.displayName);
-
-
-        location.source = "ALIAS_MATCH";
-        location.venueId = aliasMatch.venueId ?? null;
-        location.latitude = aliasMatch.venue?.latitude ?? null;
-        location.longitude = aliasMatch.venue?.longitude ?? null;
-        return location;
+async function resolveNamedVenue(location, group) {
+    // Only explicitly named venues enter the alias and venue-query cache paths.
+    const alias = await searchAliases(location, group);
+    if (alias?.venue && Number.isFinite(alias.venue.latitude) && Number.isFinite(alias.venue.longitude)) {
+        return locationFromVenue({ ...alias.venue, id: alias.venueId }, "ALIAS_MATCH");
     }
-    log.info("No alias match found for:", normalizedLocationName);
 
-
-    // 3 - Exact Google query cache. The request already contains its geographic context;
-    const payload = buildPlacesRequest(parsedLocation, group);
-    const queryHash = payload ? getGoogleQueryHash(payload) : null;
-    const cachedVenue = queryHash ? await findGoogleQueryVenue(queryHash) : null;
+    const payload = buildPlacesRequest(location, group);
+    const queryHash = getGoogleQueryHash(payload);
+    const cachedVenue = await findGoogleQueryVenue(queryHash);
     if (cachedVenue) {
-        await addVenueAlias(cachedVenue.id, parsedLocation.locationName, "GOOGLE_PLACE");
-        log.info("Google query cache hit:", payload.textQuery, "| Venue:", cachedVenue.displayName);
-        return {
-            source: "GOOGLE_QUERY_CACHE",
-            venueId: cachedVenue.id,
-            latitude: cachedVenue.latitude,
-            longitude: cachedVenue.longitude,
-        };
+        await addVenueAlias(cachedVenue.id, location.venueName, "GOOGLE_PLACE");
+        return locationFromVenue(cachedVenue, "GOOGLE_QUERY_CACHE");
     }
 
-    // 4 - Google Places text search
-    const topPlace = await searchGooglePlacesText(payload);
-    // log.info("Top Google Place result:", JSON.stringify(topPlace, null, 2));
+    const place = await searchGooglePlacesText(payload);
+    // A search for a venue that returns only a city is not a resolved venue.
+    if (!place?.id || !place.displayName?.text || isAreaResult(place)) return null;
 
-    if (topPlace?.id && topPlace?.displayName?.text) {
-        let venue = await getVenueFromPlaceId(topPlace.id) || await addNewVenueFromPlaces(topPlace);
-        location.venueId = venue.id;
+    const venue = await getVenueFromPlaceId(place.id) || await addNewVenueFromPlaces(place);
+    await addVenueAlias(venue.id, place.displayName.text, "GOOGLE_PLACE");
+    await addVenueAlias(venue.id, location.venueName, "GOOGLE_PLACE");
+    await saveGoogleQueryVenue(queryHash, payload, venue.id);
+    return locationFromVenue(venue, "GOOGLE_PLACE");
+}
 
-        await addVenueAlias(venue.id, topPlace.displayName.text, "GOOGLE_PLACE");
-        if (normalizeLocation(topPlace.displayName.text) !== normalizedLocationName) {
-            await addVenueAlias(venue.id, parsedLocation.locationName, "GOOGLE_PLACE");
-        }
+async function resolveAddressOrArea(location, group) {
+    const payload = buildPlacesRequest(location, group);
+    const place = await searchGooglePlacesText(payload);
+    if (!place) return null;
 
-        await saveGoogleQueryVenue(queryHash, payload, venue.id);
+    const isArea = isAreaResult(place);
+    // An area-only search must not turn the first business in that area into
+    // the offering's location. These results never create venues or aliases.
+    if (!location.address && !isArea) return null;
+    return {
+        source: isArea ? "GOOGLE_AREA" : "GOOGLE_ADDRESS",
+        latitude: place.location.latitude,
+        longitude: place.location.longitude,
+        venueId: null,
+    };
+}
 
-        log.info("Found venue on Google Places:", venue.displayName, venue.city ?? "", venue.country ?? "");
+async function resolveLocation(parsedLocation, group) {
+    const location = normalizeOfferingLocation(parsedLocation);
+
+    // Online offerings belong in local discovery, but have no physical venue.
+    if (location.mode === "online") return groupFallback(group);
+
+    // Home visits resolve the service area only, even if extraction accidentally
+    // includes the provider's own venue or address.
+    const physicalLocation = location.mode === "at_customer"
+        ? { ...location, venueName: null, address: null }
+        : location;
+
+    if (physicalLocation.venueName) {
+        const venue = await resolveNamedVenue(physicalLocation, group);
+        if (venue) return venue;
     }
 
-    if (topPlace?.location?.latitude != null && topPlace?.location?.longitude != null) {
-        location.source = "GOOGLE_PLACE";
-        location.latitude = topPlace.location.latitude;
-        location.longitude = topPlace.location.longitude;
-        return location;
+    // If a named venue could not be found, its stated address/area can still
+    // locate the offering approximately without inventing a venue association.
+    const addressOrArea = { ...physicalLocation, venueName: null };
+    if (addressOrArea.address || hasExplicitGeography(addressOrArea)) {
+        const resolved = await resolveAddressOrArea(addressOrArea, group);
+        if (resolved) return resolved;
     }
 
-    // 5 - Group center fallback
-    if (group?.latitude != null && group?.longitude != null) {
-        location.source = "GROUP_FALLBACK";
-        location.latitude = group.latitude;
-        location.longitude = group.longitude;
-        return location;
-    }
-
-    return location;
+    // Do not replace an explicitly stated area with an unrelated group area.
+    if (hasExplicitGeography(physicalLocation)) return unknownLocation();
+    return groupFallback(group);
 }
 
 module.exports = { resolveLocation, buildPlacesTextQuery, normalizeLocation, searchAliases, buildVenueScope };
-// IMPROVE returned value of resolve and use it in logging

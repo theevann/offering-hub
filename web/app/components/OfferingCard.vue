@@ -1,5 +1,5 @@
 <script setup>
-import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel } from '~/utils/offeringPresentation'
+import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel, offeringLocationNote } from '~/utils/offeringPresentation'
 
 const props = defineProps({
     offering: { type: Object, required: true },
@@ -18,16 +18,18 @@ const summary = computed(() => props.offering.summary || props.offering.descript
         <div v-if="showTime" class="time">{{ timeLabel }}</div>
         <div class="content">
             <h3>{{ offering.title }}</h3>
-            <p class="venue">{{ offeringVenueLabel(offering) }}
-                <span v-if="offering.distanceKm != null"> · {{ Number(offering.distanceKm).toFixed(1) }} km</span>
-            </p>
-            <p v-if="offering.locationSource === 'GROUP_FALLBACK'" class="location-note">Approximate location</p>
             <p v-if="dateRange">{{ dateRange }}</p>
             <p v-if="summary" class="description">{{ summary }}</p>
         </div>
         <div class="metadata">
+            <div class="location">
+                <span class="venue">{{ offeringVenueLabel(offering) }}
+                    <span v-if="offering.locationMode !== 'online' && offering.distanceKm != null"> · {{ Number(offering.distanceKm).toFixed(1) }} km</span>
+                </span>
+                <!-- <span v-if="offeringLocationNote(offering)" class="location-note">{{ offeringLocationNote(offering) }}</span> -->
+            </div>
             <span class="price" :class="{ unspecified: priceLabel === 'Price not specified' }">{{ priceLabel }}</span>
-            <span class="category">{{ offering.category?.toLowerCase().replaceAll('_', ' ') }}</span>
+            <!-- <span class="category">{{ offering.category?.toLowerCase().replaceAll('_', ' ') }}</span> -->
         </div>
     </NuxtLink>
 </template>
@@ -53,7 +55,10 @@ const summary = computed(() => props.offering.summary || props.offering.descript
 h3 { margin: 0 0 0.3rem; font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
 p { margin: 0; color: #59677e; font-size: 0.875rem; line-height: 1.5; }
 .description { margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.metadata { display: grid; gap: 0.3rem; justify-items: end; max-width: 11rem; font-size: 0.875rem; text-align: right; }
+.metadata { display: grid; gap: 0.3rem; justify-items: end; max-width: 15rem; font-size: 0.875rem; text-align: right; }
+.location { display: grid; gap: 0.15rem; justify-items: end; }
+.venue { color: #59677e; overflow-wrap: anywhere; }
+.location-note { color: #69758a; font-size: 0.8125rem; overflow-wrap: anywhere; }
 .category { color: #59677e; text-transform: capitalize; }
 .unspecified { color: #69758a; }
 @media (max-width: 600px) {
@@ -61,6 +66,7 @@ p { margin: 0; color: #59677e; font-size: 0.875rem; line-height: 1.5; }
     .without-time { grid-template-columns: minmax(0, 1fr); }
     .metadata { grid-column: 2; display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; max-width: none; justify-items: start; text-align: left; }
     .without-time .metadata { grid-column: 1; }
+    .location { justify-items: start; text-align: left; width: 100%; }
     .category::before { content: '· '; }
 }
 </style>

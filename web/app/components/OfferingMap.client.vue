@@ -2,7 +2,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { offeringCoordinates } from '~/utils/exploreOfferings'
-import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel } from '~/utils/offeringPresentation'
+import { offeringTimeLabel, offeringDateRange, offeringPriceLabel, offeringVenueLabel, offeringLocationNote } from '~/utils/offeringPresentation'
 
 const props = defineProps({
     offerings: { type: Array, required: true },
@@ -55,7 +55,7 @@ function createPreview(offering) {
     const venue = document.createElement('p')
     venue.textContent = offeringVenueLabel(offering)
     if (offering.distanceKm != null) venue.textContent += ` · ${Number(offering.distanceKm).toFixed(1)} km`
-    if (offering.locationSource === 'GROUP_FALLBACK') venue.textContent += ' · Approximate location'
+    if (offeringLocationNote(offering)) venue.textContent += ` · ${offeringLocationNote(offering)}`
     const price = document.createElement('p')
     price.textContent = offeringPriceLabel(offering)
     preview.append(venue, price)

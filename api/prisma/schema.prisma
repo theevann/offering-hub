@@ -53,8 +53,18 @@ enum LocationSource {
   ALIAS_MATCH
   GOOGLE_QUERY_CACHE
   GOOGLE_PLACE
+  GOOGLE_ADDRESS
+  GOOGLE_AREA
   GROUP_FALLBACK
   UNKNOWN
+}
+
+enum LocationMode {
+  online
+  fixed_place
+  at_customer
+  hybrid
+  unknown
 }
 
 model Group {
@@ -209,6 +219,7 @@ model Offering {
   price       Json? // Flexible pricing info (e.g. { "amount": 10, "currency": "USD" })
 
   locationSource LocationSource
+  locationMode   LocationMode @default(unknown)
   locationText   String? // Freeform extracted location text (e.g. "Arambol beach")
   latitude       Float? // Geocoded latitude
   longitude      Float? // Geocoded longitude

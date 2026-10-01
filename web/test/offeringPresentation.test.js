@@ -27,3 +27,41 @@ test('missing prices are explicit and zero amounts remain visible', () => {
     assert.equal(offeringPriceLabel({ pricingType: 'free' }), 'Free')
     assert.equal(offeringPriceLabel({ price: { amount: 0, currency: 'LKR' } }), '0 LKR')
 })
+
+import { offeringVenueLabel, offeringLocationNote, offeringDirectionsUrl } from '../app/utils/offeringPresentation.js'
+import { offeringCoordinates, filterOfferings } from '../app/utils/exploreOfferings.js'
+
+test('online discovery coordinates do not become a venue label, directions or map pin', () => {
+    const offering = {
+        id: 'online', category: 'SERVICE', title: 'Online class', locationMode: 'online',
+        locationSource: 'GROUP_FALLBACK', latitude: 6, longitude: 80, distanceKm: 2,
+        group: { name: 'Local community' },
+        venue: { displayName: 'Stale venue', mapsUrl: 'https://maps.google.com/' },
+        resources: [{ channel: 'url', value: 'https://maps.google.com/', purposes: ['location'] }],
+    }
+    assert.equal(offeringVenueLabel(offering), 'Online');
+    assert.equal(offeringLocationNote(offering), 'Shared in Local community');
+    assert.equal(offeringDirectionsUrl(offering), '');
+    assert.equal(offeringCoordinates(offering), null);
+    const results = filterOfferings([offering], { mode: 'services', view: 'list', search: '', timeZone: 'UTC' });
+    assert.equal(results.length, 1);
+});
+
+test('customer visits have no fixed destination; hybrid offerings retain the physical option', () => {
+    const visit = { locationMode: 'at_customer', locationText: 'At your home in Weligama', latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(visit), 'At your location');
+    assert.equal(offeringLocationNote(visit), 'At your home in Weligama');
+    assert.equal(offeringDirectionsUrl(visit), '');
+    const hybrid = { locationMode: 'hybrid', venue: { displayName: 'Studio' }, latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(hybrid), 'Studio · Online option');
+    assert.deepEqual(offeringCoordinates(hybrid), [6, 80]);
+    assert.ok(offeringDirectionsUrl(hybrid));
+});
+
+test('resolved areas are approximate and do not generate destination links', () => {
+    const area = { locationSource: 'GOOGLE_AREA', locationText: 'South Sri Lanka', latitude: 6, longitude: 80 };
+    assert.equal(offeringVenueLabel(area), 'South Sri Lanka');
+    assert.match(offeringLocationNote(area), /Approximate area/);
+    assert.equal(offeringDirectionsUrl(area), '');
+    assert.ok(offeringDirectionsUrl({ ...area, locationSource: 'GOOGLE_ADDRESS' }));
+});

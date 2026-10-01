@@ -1,4 +1,5 @@
 import { dateKey, formatDay } from './exploreOfferings.js'
+import { webUrl } from './offeringLinks.js'
 
 // Agenda cards and map previews use the same labels and timezone rules.
 export function offeringTimeLabel(offering, timeZone, selectedDate = '') {
@@ -34,5 +35,34 @@ export function offeringPriceLabel({ pricingType, price }) {
 }
 
 export function offeringVenueLabel(offering) {
-    return offering.venue?.displayName || offering.locationText || 'Location to be confirmed'
+    if (offering.locationMode === 'online') return 'Online'
+    if (offering.locationMode === 'at_customer') return 'At your location'
+    let place = offering.venue?.displayName || offering.locationText;
+    place = place?.split(" – ")[0].split(" | ")[0].trim() || ''
+    if (offering.locationMode === 'hybrid') return place ? `${place} · Online option` : 'Online and in person'
+    return place || 'Location to be confirmed'
+}
+
+export function offeringLocationNote(offering) {
+    if (offering.locationMode === 'online') {
+        return offering.group?.name ? `Shared in ${offering.group.name}` : ''
+    }
+    if (offering.locationMode === 'at_customer') {
+        return offering.locationText || 'Confirm the area.'
+    }
+    if (offering.locationSource === 'GOOGLE_AREA') return 'Approximate area. Confirm the exact location.'
+    if (offering.locationSource === 'GROUP_FALLBACK') return 'Approximate area derived from the community. Confirm the exact location.'
+    return ''
+}
+
+export function offeringDirectionsUrl(offering) {
+    if (!offering || ['online', 'at_customer'].includes(offering.locationMode)) return ''
+    const resource = offering.resources?.find(item => item.channel === 'url' && item.purposes?.includes('location') && !item.purposes.includes('payment') && webUrl(item.value))
+    const supplied = webUrl(offering.venue?.mapsUrl) || webUrl(resource?.value)
+    if (supplied) return supplied
+    if (['GROUP_FALLBACK', 'GOOGLE_AREA'].includes(offering.locationSource)) return ''
+    const lat = offering.latitude ?? offering.venue?.latitude
+    const lng = offering.longitude ?? offering.venue?.longitude
+    if (lat == null || lng == null) return ''
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`
 }
