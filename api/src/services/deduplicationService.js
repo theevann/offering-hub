@@ -22,6 +22,7 @@ log.info(`Using ${DEDUP_MODELS.join(", ")} for message deduplication.`)
 
 
 function normalize(text) {
+    if (!text || typeof text !== 'string') return '';
     return text
         .toLowerCase()
         .replace(/[^\w\s]/g, ' ')

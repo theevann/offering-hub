@@ -54,6 +54,7 @@ data-prod/
 
 # Keep generated prisma client out of git
 api/src/generated/prisma/
+test_messages
 
 # Temporary: skip Prisma migration history until first prod deploy prep
 api/prisma/migrations/

@@ -2,11 +2,13 @@ const { createLogger } = require("../utils/logger");
 const log = createLogger("ingestion");
 
 const prisma = require("../db/prismaClient");
-// const { processRawMessage } = require("./processingService");
 const { computeHash, findRecentExactDuplicate } = require("./deduplicationService");
-// const { get } = require("node:http");
+const { calculateNextScheduledAt } = require("../utils/batchCoalescing");
 
 const DEDUPLICATE = true;
+const DEBOUNCE_SECONDS = Number(process.env.MESSAGE_BATCH_DEBOUNCE_SECONDS || 60);
+const MAX_WAIT_SECONDS = Number(process.env.MESSAGE_BATCH_MAX_WAIT_SECONDS || 300);
+const MAX_BATCH_SIZE = Number(process.env.MESSAGE_BATCH_MAX_SIZE || 10);
 
 // Default location for new groups (Da Nang, Vietnam)
 // const DEFAULT_GROUP_LOCATION = {
@@ -29,7 +31,7 @@ const DEFAULT_GROUP_LOCATION = {
 
 
 async function ingestRawMessage(data) {
-    // Destructure incoming fields
+    const rawText = data.rawText || "";
     const {
         source,
         messageId,
@@ -38,14 +40,13 @@ async function ingestRawMessage(data) {
         senderPhone,
         groupId: whatsappGroupId,
         groupName,
-        rawText,
         mediaUrl,
         msgTimestamp: timestamp
     } = data;
 
     log.info(`> Receiving raw message from source: ${source}, messageId: ${messageId}`);
 
-    if (!rawText && !mediaUrl) throw new Error("rawText or mediaUrl is required");
+    if (!rawText.trim() && !mediaUrl) throw new Error("rawText or mediaUrl is required");
     const contentHash = await computeHash(rawText, mediaUrl);
 
     // Comment next line out once we have group management in place, for now we want to ingest all messages to build up our group database
@@ -59,11 +60,6 @@ async function ingestRawMessage(data) {
         throw new Error(`Group not found: ${whatsappGroupId}`);
     }
 
-    if (rawText.length < 100 && !mediaUrl) {
-        log.info(`Raw text too short (${rawText.length} chars) for message ${messageId} - Ignoring`);
-        return null;
-    }
-
     const previousExactMatch = DEDUPLICATE ? await findRecentExactDuplicate(contentHash) : null;
     if (previousExactMatch) {
         log.info(
@@ -73,11 +69,88 @@ async function ingestRawMessage(data) {
         return null;
     }
 
-    const rawMessage = await createRawMessage(source, messageId, senderId, senderName, senderPhone, group, rawText, contentHash, timestamp, mediaUrl);
+    const { rawMessage, job } = await prisma.$transaction(async (tx) => {
+        // Advisory lock on (source, senderId, groupId) to serialize rapid concurrent messages
+        const lockKey = `ingest:${source}:${senderId}:${group.id}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-    log.info("Created rawMessage:", rawMessage.id, "from group:", rawMessage.group?.name || "unknown");
+        const now = new Date();
 
-    // return await processRawMessage(rawMessage);
+        // Check for an active pending job for this sender and group
+        const pendingJob = await tx.processingJob.findFirst({
+            where: {
+                source,
+                senderId,
+                groupId: group.id,
+                status: "PENDING",
+            },
+            include: {
+                _count: {
+                    select: { rawMessages: true }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        let targetJob;
+        const isEligible = pendingJob &&
+            pendingJob._count.rawMessages < MAX_BATCH_SIZE &&
+            now - pendingJob.createdAt < MAX_WAIT_SECONDS * 1000;
+
+        if (isEligible) {
+            const isFull = (pendingJob._count.rawMessages + 1) >= MAX_BATCH_SIZE;
+            const scheduledAt = calculateNextScheduledAt({
+                now,
+                createdAt: pendingJob.createdAt,
+                maxWaitSeconds: MAX_WAIT_SECONDS,
+                debounceSeconds: DEBOUNCE_SECONDS,
+                isFull,
+            });
+
+            targetJob = await tx.processingJob.update({
+                where: { id: pendingJob.id },
+                data: {
+                    lastMessageAt: now,
+                    scheduledAt,
+                }
+            });
+        } else {
+            const scheduledAt = new Date(now.getTime() + (DEBOUNCE_SECONDS * 1000));
+
+            targetJob = await tx.processingJob.create({
+                data: {
+                    source,
+                    senderId,
+                    groupId: group.id,
+                    status: "PENDING",
+                    scheduledAt,
+                    firstMessageAt: now,
+                    lastMessageAt: now,
+                }
+            });
+        }
+
+        const createdMessage = await createRawMessage(
+            tx,
+            source,
+            messageId,
+            senderId,
+            senderName,
+            senderPhone,
+            group,
+            rawText,
+            contentHash,
+            timestamp,
+            mediaUrl,
+            targetJob.id
+        );
+
+        return { rawMessage: createdMessage, job: targetJob };
+    });
+
+    log.info(`Created rawMessage ${rawMessage.id} assigned to processingJob ${job.id} (status: ${job.status}, scheduledAt: ${job.scheduledAt.toISOString()}) from group: ${rawMessage.group?.name || "unknown"}`);
+
+    return { rawMessage, processingJob: job };
 }
 
 async function getOrCreateGroup(sourceId, groupName) {
@@ -122,8 +195,8 @@ function getMimeTypeFromUrl(url) {
     return mimeTypes[extension] || 'application/octet-stream';
 }
 
-async function createRawMessage(source, messageId, senderId, senderName, senderPhone, group, rawText, contentHash, timestamp, mediaUrl) {
-    return await prisma.rawMessage.create({
+async function createRawMessage(tx, source, messageId, senderId, senderName, senderPhone, group, rawText, contentHash, timestamp, mediaUrl, processingJobId) {
+    return await tx.rawMessage.create({
         data: {
             source,
             messageId,
@@ -131,11 +204,10 @@ async function createRawMessage(source, messageId, senderId, senderName, senderP
             senderName,
             senderPhone,
             groupId: group?.id || null,
+            processingJobId: processingJobId || null,
             rawText,
             contentHash,
             timestamp: timestamp ? new Date(timestamp) : undefined,
-            parsingStatus: "PENDING",
-            parsingNotes: null,
             media: mediaUrl
                 ? {
                     create: {

@@ -3,7 +3,7 @@ const log = createLogger("routes/offerings");
 
 const express = require("express");
 const router = express.Router();
-const { getNearbyOfferings, getOfferingById } = require("../services/offeringService");
+const { getAllOfferings, getNearbyOfferings, getOfferingById } = require("../services/offeringService");
 
 function parseNearbyQuery(query) {
   function parseNumber(value, fallback = NaN) {
@@ -46,7 +46,7 @@ function parseNearbyQuery(query) {
 
 router.get("/all", async (req, res) => {
   try {
-    const result = await offeringService.getAllOfferings();
+    const result = await getAllOfferings();
     res.status(200).json(result);
   } catch (err) {
     log.error("GET /offerings/all error:", err);

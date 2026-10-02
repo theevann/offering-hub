@@ -18,14 +18,17 @@ enum OfferingCategory {
 }
 
 enum ParseStatus {
-  PENDING // Not yet processed
-  PROCESSING // Currently being parsed
   PARSED_OK // Successfully parsed into Offering
   PARSED_PARTIAL // Parsed but missing key fields (e.g. no date)
   PARSED_NOOP // Parsed but determined to be non-offering (e.g. just a chat message)
-  DUPLICATE // Matches an existing offering
-  // PARSED_DUPLICATE // Matches an existing offering after parsing
   FAILED // Parsing failed, check parseError
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum GroupType {
@@ -39,7 +42,6 @@ enum GroupType {
 enum AliasSource {
   MANUAL
   GOOGLE_MAPS_URL
-  FUZZY_MATCH  // For now, deprecated (we do not do fuzzy matching in the current system)
   GOOGLE_QUERY_CACHE
   GOOGLE_PLACE
 }
@@ -98,8 +100,9 @@ model Group {
   updatedAt DateTime @updatedAt
 
   // Relations
-  rawMessages RawMessage[]
-  offerings   Offering[]
+  rawMessages    RawMessage[]
+  offerings      Offering[]
+  processingJobs ProcessingJob[]
 
   @@index([country])
   @@index([city])
@@ -151,6 +154,37 @@ model VenueAlias {
   @@index([source, normalizedAlias]) // Google query lookup has no venue/geography scope.
 }
 
+model ProcessingJob {
+  id             String           @id @default(cuid())
+  source         String           @default("whatsapp")
+  senderId       String
+  groupId        String?
+  group          Group?           @relation(fields: [groupId], references: [id])
+
+  status         ProcessingStatus @default(PENDING)
+  scheduledAt    DateTime         @default(now())
+  firstMessageAt DateTime         @default(now())
+  lastMessageAt  DateTime         @default(now())
+
+  combinedText   String           @default("")
+  parsingModel   String?
+  parsingStatus  ParseStatus?
+  parsingNotes   String?
+  rawParsedJson  Json?
+  attempts       Int              @default(0)
+  lastError      String?
+
+  rawMessages    RawMessage[]
+  offerings      Offering[]
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([source, senderId, groupId, status])
+  @@index([groupId])
+}
+
 model RawMessage {
   id     String @id @default(cuid())
   source String @default("whatsapp")
@@ -167,23 +201,19 @@ model RawMessage {
   rawText     String
   contentHash String?
 
-  // Processing state
-  parsingModel  String?
-  parsingStatus ParseStatus @default(PENDING)
-  parsingNotes  String?
-
   media Media[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  offerings Offering[]
-  group     Group?     @relation(fields: [groupId], references: [id])
+  processingJobId String?
+  processingJob   ProcessingJob? @relation(fields: [processingJobId], references: [id])
+  group           Group?         @relation(fields: [groupId], references: [id])
 
   @@index([groupId])
-  @@index([parsingStatus])
   @@index([createdAt])
+  @@index([processingJobId, createdAt])
   @@index([contentHash, createdAt])
 }
 
@@ -232,9 +262,9 @@ model Offering {
   groupId String
   group   Group  @relation(fields: [groupId], references: [id])
 
-  // Original message reference
-  rawMessageId String
-  rawMessage   RawMessage @relation(fields: [rawMessageId], references: [id])
+  // Processing run reference
+  processingJobId String
+  processingJob   ProcessingJob @relation(fields: [processingJobId], references: [id], onDelete: Cascade)
 
   media Media[]
   resources Json @default("[]") // [{ value, channel, purposes: [] }]
@@ -243,5 +273,5 @@ model Offering {
   updatedAt DateTime  @updatedAt
   expiresAt DateTime? @default(dbgenerated("now() + interval '7 days'"))
   
-  @@index([rawMessageId])
+  @@index([processingJobId])
 }

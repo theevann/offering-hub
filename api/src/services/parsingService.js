@@ -29,6 +29,7 @@ Splitting and recurrence rules:
 - Example: "Yoga daily: Vinyasa at 9am and Slow Flow at 5pm", timestamp 2026-09-20, produces 2 offerings, each with 7 dates entries covering September 20–26. Each entry has dateStart = dateEnd = its session date.
 - Keep a single multi-day retreat or one event's internal agenda together, using one dates entry covering the event.
 - Merge duplicate descriptions and occurrences across text and images.
+- The input text may combine multiple messages sent sequentially by the same sender (e.g. separated by headers like "--- Message N ---"). Treat them together as a single continuous post.
 - Copy shared details only when they clearly apply.
 
 Each offering must contain:
@@ -184,7 +185,8 @@ async function parse({ rawText, media, timestamp, group }) {
             parsedOfferings: parsedOfferings,
             parsingModel: llmOutput.parsingModel,
             parsingStatus: llmOutput.parsingStatus,
-            parsingNotes: llmOutput.parsingNotes || null
+            parsingNotes: llmOutput.parsingNotes || null,
+            rawParsedJson: llmOutput
         };
 
     } catch (error) {
@@ -195,7 +197,8 @@ async function parse({ rawText, media, timestamp, group }) {
             parsedOfferings: [],
             parsingModel: null,
             parsingStatus: "FAILED",
-            parsingNotes: error.message
+            parsingNotes: error.message,
+            rawParsedJson: null
         };
     }
 }

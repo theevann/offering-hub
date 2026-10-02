@@ -155,9 +155,11 @@ function updatedLabel(value) {
                     <img :src="offeringPhotoUrl(photo.url)" :alt="`Image for ${offering.title}`">
                 </dialog>
                 <details :key="offering.id" id="original-message" class="source-section">
-                    <summary>Original message</summary>
+                    <summary>Original message<template v-if="offering.rawMessages?.length > 1">s ({{ offering.rawMessages.length }})</template></summary>
                     <p class="muted"><template v-if="offering.group?.name">Shared in {{ offering.group.name }} · </template>Updated {{ updatedLabel(offering.updatedAt) }}</p>
-                    <blockquote v-if="offering.rawMessage?.rawText">{{ offering.rawMessage.rawText }}</blockquote>
+                    <template v-if="offering.rawMessages?.length">
+                        <blockquote v-for="msg in offering.rawMessages" :key="msg.id">{{ msg.rawText || '(Image attached)' }}</blockquote>
+                    </template>
                     <p v-else class="muted">The original message is unavailable.</p>
                 </details>
             </template>

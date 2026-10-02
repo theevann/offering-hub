@@ -28,32 +28,10 @@ async function getAllOfferings() {
           ],
         },
       ],
-      // rawMessage: {
-      //   is: {
-      //     parsingStatus: "PARSED_OK",
-      //   },
-      // },
     },
     orderBy: { startTime: "asc" },
     include: {
-      rawMessage: {
-        select: {
-          rawText: true,
-          senderPhone: true,
-          group: {
-            select: {
-              id: true,
-              sourceId: true,
-              name: true,
-              country: true,
-              city: true,
-              latitude: true,
-              longitude: true,
-              timezone: true,
-            },
-          },
-        },
-      },
+      group: true,
       venue: {
         select: {
           displayName: true,
@@ -108,7 +86,6 @@ async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50, offset = 0 }
     include: {
       venue: true,
       group: true,
-      rawMessage: { include: { group: true } },
       media: true,
     },
   });
@@ -125,15 +102,31 @@ async function getNearbyOfferings({ lat, lng, radiusKm, limit = 50, offset = 0 }
 }
 
 async function getOfferingById(id) {
-  return prisma.offering.findUnique({
+  const offering = await prisma.offering.findUnique({
     where: { id },
     include: {
       venue: true,
       group: { select: { name: true, timezone: true } },
-      rawMessage: { select: { rawText: true, timestamp: true } },
+      processingJob: {
+        include: {
+          rawMessages: {
+            select: { id: true, rawText: true, timestamp: true, createdAt: true },
+            orderBy: [{ timestamp: "asc" }, { createdAt: "asc" }],
+          },
+        },
+      },
       media: { select: { id: true, type: true, url: true } },
     },
   });
+
+  if (!offering) return null;
+
+  const rawMessages = offering.processingJob?.rawMessages || [];
+
+  return {
+    ...offering,
+    rawMessages,
+  };
 }
 
 module.exports = { getAllOfferings, getNearbyOfferings, getOfferingById };
